@@ -31,6 +31,8 @@ python3 main.py run --cycles 2
 python3 main.py run --interval 60 --poll 5
 ```
 
+The same `run` command starts the Telegram remote when enabled and locally configured. The remote is supervised separately, retried after process failure, and stopped when `run` exits. No second terminal is required; see the [remote guide](telegram-remote.md).
+
 Research runs in a subprocess so position supervision continues while AI requests wait. `--poll 5` is a delay between checks, not a guaranteed five-second response time; network requests add latency.
 
 **Ctrl+C does not close positions.** Confirmed native TP/SL remains at OKX. Automatic stop adjustments after TP1/TP2 require a running supervisor. Restart `run` to resume. Do not delete the ledger or run another bot on the same pairs. Use a dedicated demo account. Manual positions count toward capacity; unknown exposure/orders block entries and are not automatically adopted or closed.

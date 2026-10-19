@@ -16,6 +16,7 @@ from hedging_tools.paths import PROJECT_ROOT, RUNTIME_DIR
 from hedging_tools.portfolio import Portfolio, Store
 from hedging_tools.history_worker import HistoryWorker
 from hedging_tools.controls import Controls
+from hedging_tools.remote_worker import RemoteWorker
 
 
 def research_process(output):
@@ -138,6 +139,7 @@ def main():
         worker = HistoryWorker()
         reviewer = HistoryWorker(module='hedging_tools.improve', arguments=('--evaluate',))
         shadow = HistoryWorker(module='hedging_tools.shadow', arguments=('--update',), interval=5)
+        remote = RemoteWorker()
         def background():
             heartbeat = {'time': datetime.now(timezone.utc).isoformat(), 'status': 'RUNNING'}
             temporary = RUNTIME_DIR / 'engine-heartbeat.tmp'
@@ -146,9 +148,11 @@ def main():
             worker.tick()
             reviewer.tick()
             shadow.tick()
+            remote.tick()
         try:
             loop(manager, stop, args.interval, args.cycles, args.poll, publish=publish, background=background)
         finally:
+            remote.close()
             (RUNTIME_DIR / "engine-heartbeat.json").write_text(json.dumps({"time": datetime.now(timezone.utc).isoformat(), "status": "STOPPED"}))
             worker.close()
             reviewer.close()

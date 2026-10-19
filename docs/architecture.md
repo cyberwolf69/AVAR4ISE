@@ -15,7 +15,7 @@ Flow: public market data → screening → optional headlines → validated AI p
 | `demo_agent` | Legacy budget, single cycle, daily halt, recovery, cooldown |
 | `demo_runner` | Legacy bounded loop, process lock, cycle history |
 | `portfolio`, `portfolio_runner` | Persistent portfolio, split TP/SL management, supervision |
-| `controls`, `telegram_remote` | Runtime settings and owner-only remote |
+| `controls`, `telegram_remote`, `remote_worker` | Runtime settings, owner-only remote, and its lifecycle under `run` |
 | `paths` | Configuration and runtime locations |
 
 ## Controls

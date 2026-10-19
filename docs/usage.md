@@ -34,7 +34,7 @@ Prefix each command with `python3 main.py` or `python3 -m hedging_tools`.
 | `research --ai` | Market, headline, and AI research without orders |
 | `preflight` | Read the demo account |
 | `agent --once --hold-seconds 60` | Legacy single cycle; may place demo orders |
-| `run` | Continuous portfolio supervisor, up to five positions |
+| `run` | Start the portfolio, background workers, and configured Telegram remote together |
 | `run --cycles 2` | Stop after two scans; native TP/SL remains active |
 | `bounded-run --cycles 2` | Legacy test runner before portfolio migration |
 | `agent --recover` | Reconcile pending legacy state without orders |
@@ -47,7 +47,7 @@ Prefix each command with `python3 main.py` or `python3 -m hedging_tools`.
 | `alerts --preview` | Local synthetic alert preview |
 | `alerts --test` | Send a test to enabled Telegram/Discord destinations |
 | `telegram --check` | Local remote configuration check |
-| `telegram` | Start the owner-only Telegram remote and register its menu |
+| `telegram` | Optional standalone remote for troubleshooting; do not also run the managed remote |
 
 Direct modules remain available, for example `python3 -m hedging_tools.demo_runner --help`. Optional editable installation: `python3 -m pip install -e .`, then `avar4ise run`. The legacy `hedging-tools` console alias remains available. See the [alert guide](alerts.md) and [remote guide](telegram-remote.md).
 
@@ -55,7 +55,7 @@ Direct modules remain available, for example `python3 -m hedging_tools.demo_runn
 
 `run` stores state in `runtime/portfolio.sqlite3`, supervision reports in `runtime/portfolio-output.json`, and analysis in `runtime/research-output.json`. Never delete the ledger to bypass a risk block. The initial migration inherits the old `demo-strategy.sqlite3` budget; pending legacy activity must be reconciled first.
 
-Ctrl+C stops scanning and supervision. Confirmed native TP/SL remains at OKX, but stop adjustments after TP require the program. Restart `run` to resume management. See [portfolio rules](portfolio.md) for partial exits, daily loss, aggregate risk, and API recovery.
+Ctrl+C stops scanning, supervision, and the Telegram remote managed by `run`. Confirmed native TP/SL remains at OKX, but stop adjustments after TP require the program. Restart `run` to resume management. See [portfolio rules](portfolio.md) for partial exits, daily loss, aggregate risk, and API recovery.
 
 ## Layout migration
 

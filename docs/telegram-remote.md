@@ -16,19 +16,21 @@ Replace the example with your numeric Telegram user ID. The remote uses the exis
 ```sh
 # Local configuration check; no network requests
 python3 main.py telegram --check
-# Restart the engine to enable runtime control settings
+# Start the engine and configured Telegram remote together
 python3 main.py run
-# In a second terminal
-python3 main.py telegram
 ```
 
-Open a **private chat** with the bot and send `/start` or `/help`. The remote can stay running when `run` stops, provided its process and computer remain active. It cannot start a stopped OS process. `/resume` only enables entries in an already running engine. The remote does not restart processes or force-close positions.
+Open a **private chat** with the bot and send `/start` or `/help`. The remote starts automatically as a managed child of `run` when enabled and configured. No second terminal is required. Ctrl+C or a cycle-limit exit stops the managed remote together with the engine. It cannot start a stopped OS process. `/resume` only enables entries in an already running engine. The remote does not restart processes or force-close positions.
 
 ## Automatic command menu
 
-Each remote startup registers the slash commands and Telegram menu button from code, scoped to the owner's private chat. Manual BotFather `/setcommands` setup is unnecessary. `COMMAND_MENU_READY` confirms Telegram accepted registration. On failure, polling continues and registration is retried after at least 60 seconds. Send `/start` first if you have never opened the bot chat.
+Each managed remote startup registers the slash commands and Telegram menu button from code, scoped to the owner's private chat. Manual BotFather `/setcommands` setup is unnecessary. `COMMAND_MENU_READY` confirms Telegram accepted registration. On failure, polling continues and registration is retried after at least 60 seconds. Send `/start` first if you have never opened the bot chat.
 
-Deployment must start the remote process with local credentials. A GitHub push alone does not register the menu. Restart the remote after command menu updates. `--check` remains offline.
+Deployment only needs `python3 main.py run` with local credentials and `TELEGRAM_REMOTE_ENABLED=true`. A GitHub push alone does not register the menu. Restart `run` after menu or credential updates. `--check` remains offline.
+
+Disabled or invalid local configuration produces `REMOTE_NOT_STARTED`; position supervision continues. Fix `.env` and restart `run`. A remote process exit or launch failure is retried after at least 60 seconds, without stopping position management. The remote retains its own lock to reject duplicate pollers.
+
+`python3 main.py telegram` remains an optional standalone troubleshooting command. Do not run it alongside an enabled managed remote or another poller using the same token. A standalone remote is not stopped by `run`; stop that standalone process before switching to the single-command workflow.
 
 | Command | Purpose |
 |---|---|

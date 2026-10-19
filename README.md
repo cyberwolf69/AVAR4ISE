@@ -17,27 +17,79 @@ An **OKX Demo** perpetual trading agent combining market structure screening, AI
 
 Python **3.11+**, macOS or Linux. The runtime uses the Python standard library. Run from the repository root; package installation is optional.
 
+### 1. Download and configure
+
+For a new checkout:
+
 ```sh
-# Offline tests and synthetic example; no API keys required
-python3 -B -m unittest discover -s tests -t . -v
-python3 -B main.py paper-demo
-python3 main.py --help
+git clone https://github.com/cyberwolf69/AVAR4ISE.git
+cd AVAR4ISE
+# Preserve .env if it already exists
+[ -f .env ] || cp .env.example .env
+chmod 600 .env
+nano .env
 ```
 
-Copy `.env.example` to `.env` **only if it does not already exist**, then fill in local credentials. Never commit `.env`. See the [usage guide](docs/usage.md).
+In `.env`, fill in `APINEX_API_KEY`, `OKX_DEMO_API_KEY`, `OKX_DEMO_SECRET_KEY`, and `OKX_DEMO_PASSPHRASE`. Use OKX **Demo Trading** credentials and set `AI_ENABLED=true`.
+
+For the Telegram remote, fill in `TELEGRAM_BOT_TOKEN`, set `TELEGRAM_OWNER_ID` to your numeric Telegram user ID, and set `TELEGRAM_REMOTE_ENABLED=true`. The owner ID is different from the alert channel's `TELEGRAM_CHAT_ID`. For signal delivery, also configure `ALERTS_ENABLED`, `ALERT_CHANNELS`, and the destination credentials described in the [alert guide](docs/alerts.md). Never commit `.env`.
+
+### 2. Check the configuration
+
+Run these commands from the repository directory:
 
 ```sh
 # Read the demo account without placing orders
 python3 main.py preflight
-# Market, headlines, and AI analysis without orders
-python3 main.py research --ai
-# May place DEMO orders after signal validation and risk checks
-python3 main.py run
-# Start the private remote in a second terminal
-python3 main.py telegram
+# Check remote configuration locally; no Telegram request
+python3 main.py telegram --check
 ```
 
-By default, `run` continues until Ctrl+C, scans again 60 seconds after research completes, and checks positions with a five-second polling delay. Network requests add latency. Ctrl+C leaves confirmed native TP/SL orders in place; stop adjustments require the program to remain running. See `python3 main.py run --help`.
+Resolve any `BLOCKED` result before continuing. The remote check should return `READY`; it does not verify network connectivity.
+
+### 3. Start everything
+
+```sh
+python3 main.py run
+```
+
+Keep this terminal running. This single command starts the trading engine, research, signal tracking, improve/shadow workers, and the Telegram remote when `TELEGRAM_REMOTE_ENABLED=true` and its local configuration is valid. It may place **DEMO orders** after signal validation and risk checks. No second terminal or separate remote command is required.
+
+For Telegram, wait for `COMMAND_MENU_READY`, then open a private chat with your bot. Send these commands one at a time:
+
+```text
+/start
+/status
+/settings
+/positions
+/performance
+```
+
+The menu registers automatically; no manual BotFather `/setcommands` step is needed. Settings changes require `/confirm CODE`. See the [remote guide](docs/telegram-remote.md) for leverage, margin, slots, pause, and resume.
+
+If remote configuration is disabled or incomplete, `REMOTE_NOT_STARTED` explains why and the engine continues. Correct `.env` and restart `run` to enable it. If the remote process exits, the supervisor retries after at least 60 seconds while continuing position management. Do not also start a standalone Telegram poller with the same token.
+
+### Stopping and restarting
+
+Press `Ctrl+C` once in the running terminal. The supervisor shuts down its engine workers and managed Telegram remote. Stop an older instance before starting a replacement; restart everything with `python3 main.py run`.
+
+By default, `run` scans again 60 seconds after research completes and checks positions with a five-second polling delay. Network requests add latency. **Ctrl+C does not close positions:** confirmed native TP/SL orders remain at OKX, but stop adjustments require the engine to remain running. The managed Telegram remote also stops, so it cannot restart the application. `/resume` permits entries in an active engine; it cannot start a stopped process. See `python3 main.py run --help`.
+
+### Optional checks
+
+```sh
+# Offline tests and synthetic paper example; no API keys required
+python3 -B -m unittest discover -s tests -t . -v
+python3 -B main.py paper-demo
+# Local alert preview; sends nothing
+python3 main.py alerts --preview
+# Market, headlines, and AI research without orders
+python3 main.py research --ai
+# Full command list
+python3 main.py --help
+```
+
+`research --ai` can publish alerts when configured. See the [usage guide](docs/usage.md) for additional commands.
 
 ## Initial limits
 
