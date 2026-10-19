@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hedging-tools"
+version = "0.1.0"
+description = "OKX Demo perpetual trading agent with AI research and persistent risk controls"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+classifiers = ["Development Status :: 3 - Alpha", "Programming Language :: Python :: 3", "Operating System :: POSIX"]
+
+[project.scripts]
+hedging-tools = "hedging_tools.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["hedging_tools*"]
+
+[tool.setuptools.package-data]
+hedging_tools = ["config/*.json"]

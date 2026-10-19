@@ -1,0 +1,17 @@
+{
+  "mode": "paper",
+  "setup_model": "structure_bos_retest_v1",
+  "exchange": "okx",
+  "initial_equity": "50",
+  "daily_loss_fraction": "0.10",
+  "margin_per_trade": "5",
+  "min_leverage": 10,
+  "max_leverage": 30,
+  "risk_per_trade": "1",
+  "max_positions": 1,
+  "timezone": "Asia/Jakarta",
+  "pairs": ["BTC-USDT-SWAP", "ETH-USDT-SWAP"],
+  "max_spread_fraction": "0.001",
+  "max_market_age_seconds": 30,
+  "estimated_roundtrip_cost_fraction": "0.002"
+}
