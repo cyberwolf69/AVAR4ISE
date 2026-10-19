@@ -96,7 +96,7 @@ def fetch_news(database, opener=urlopen, now=None):
         for source, url in FEEDS.items():
             status, error, articles, rejected = "OK", None, [], 0
             try:
-                request = Request(url, headers={"User-Agent": "HedgingTools-NewsReader/0.1"})
+                request = Request(url, headers={"User-Agent": "AVAR4ISE-NewsReader/0.1"})
                 with opener(request, timeout=15, context=context) as response:
                     payload = response.read(2_000_001)
                 observed = utc(now or datetime.now(timezone.utc))

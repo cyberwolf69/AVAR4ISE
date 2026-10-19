@@ -14,6 +14,7 @@ from hedging_tools.ai_client import AIClient, AIError
 from hedging_tools.alerts import notify_signals
 from hedging_tools.universe import select as select_universe
 from hedging_tools.signal_history import SignalHistory
+from hedging_tools.controls import Controls
 
 
 def review_priority(packets, database):
@@ -45,6 +46,9 @@ def main():
         print(json.dumps(validate_proposal(proposal, json.loads(row[0])), indent=2))
         return 0
     config = json.loads(CONFIG_PATH.read_text())
+    controls = Controls().read()
+    config.update(min_leverage=controls['min_leverage'], max_leverage=controls['max_leverage'],
+                  margin_per_trade=controls['margin'])
     public = OKXPublic()
     universe = {'status': 'FIXED', 'pairs': config['pairs']}
     if args.portfolio:

@@ -1,78 +1,64 @@
-# Penggunaan
+# Usage
 
-Jalankan dari root repository dengan Python 3.11+ pada macOS/Linux. Kredensial
-berada di `.env` root, bukan di source atau runtime.
+Run from the repository root with Python 3.11+ on macOS/Linux. Credentials belong in the root `.env`, not source files or runtime reports.
 
-## Konfigurasi lokal
+## Local configuration
 
 ```sh
-# Hanya untuk checkout baru; jangan menimpa key yang sudah ada
+# New checkouts only; do not overwrite existing credentials
 cp .env.example .env
 chmod 600 .env
 ```
 
-Isi `APINEX_API_KEY`, `OKX_DEMO_API_KEY`, `OKX_DEMO_SECRET_KEY`, dan
-`OKX_DEMO_PASSPHRASE`. Gunakan key **Demo Trading**. Set `AI_ENABLED=true` untuk
-riset AI. Template memakai APINEX; ketersediaan model/harga mengikuti provider.
-Semua signed request OKX memakai header demo, tanpa switch real trading.
+Fill `APINEX_API_KEY`, `OKX_DEMO_API_KEY`, `OKX_DEMO_SECRET_KEY`, and `OKX_DEMO_PASSPHRASE`. Use **Demo Trading** credentials. Set `AI_ENABLED=true` for AI research. The template uses APINEX; model availability and pricing are provider-dependent. All signed OKX requests use the demo header; there is no live trading switch.
 
-Gunakan akun demo khusus bot. Exposure/order yang tidak dikenal memblokir entry
-baru; agent tidak mengambil alih posisi manual.
+Use a dedicated demo account. Unknown exposure/orders block new entries; the agent does not take over manual positions.
 
-## Perintah
+## Commands
 
-Awali setiap perintah dengan `python3 -m hedging_tools`.
+Prefix each command with `python3 main.py` or `python3 -m hedging_tools`.
 
-| Perintah | Fungsi |
+| Command | Purpose |
 |---|---|
-| `paper-demo` | Siklus paper sintetis, offline |
-| `risk-demo` | Contoh risiko, offline |
-| `scan` | Screening market publik untuk pasangan konfigurasi paper |
-| `universe` | Daftar/ranking hingga 20 pair dinamis, read-only |
-| `improve` | Evaluasi SL/exit dari bukti lokal, tanpa mengubah strategi |
-| `improve --evaluate` | Uji usulan filter entry pada training/holdout |
-| `signals` | Ringkasan hasil sinyal referensi lokal |
-| `signals --details` | Milestone per sinyal, terpisah dari trade |
-| `signals --update` | Perbarui riwayat memakai candle publik |
-| `research --ai` | Market, headline, AI; tanpa order |
-| `preflight` | Baca akun demo |
-| `agent --once --hold-seconds 60` | Satu siklus, dapat mengirim order demo |
-| `run` | Portfolio maksimal 5 posisi, berjalan sampai Ctrl+C |
-| `run --cycles 2` | Berhenti setelah dua scan; TP/SL native tetap aktif |
-| `bounded-run --cycles 2` | Runner tes lama, sebelum migrasi portfolio |
-| `agent --recover` | Rekonsiliasi pending, tanpa order |
-| `reconcile runtime/demo-execution-….json` | Periksa jurnal tertentu |
-| `execution-test --execute-demo-test` | Buka/tutup trade demo teknis tanpa sinyal AI |
-| `ai-check --smoke-test` | Uji koneksi AI secara eksplisit |
-| `evaluate-ai` | Uji skema AI dengan data sintetis |
-| `paper-bridge` | Proposal ke ledger paper lokal |
-| `reversion` | Riset OU/Zeta tanpa order |
-| `alerts --preview` | Contoh alert sintetis lokal |
-| `alerts --test` | Kirim tes ke Telegram/Discord yang diaktifkan |
+| `paper-demo` | Offline synthetic paper cycle |
+| `risk-demo` | Offline risk example |
+| `scan` | Public market screening for paper-configured pairs |
+| `universe` | Read-only ranking of up to 20 dynamic pairs |
+| `improve` | Review SL/exit evidence without changing the strategy |
+| `improve --evaluate` | Evaluate entry filters on training/holdout data |
+| `signals` | Local reference signal summary |
+| `signals --details` | Per-signal milestones, separate from trades |
+| `signals --update` | Update outcomes using public candles |
+| `shadow` | Local structure comparison report |
+| `shadow --update` | Collect new snapshots and update reference outcomes |
+| `research --ai` | Market, headline, and AI research without orders |
+| `preflight` | Read the demo account |
+| `agent --once --hold-seconds 60` | Legacy single cycle; may place demo orders |
+| `run` | Continuous portfolio supervisor, up to five positions |
+| `run --cycles 2` | Stop after two scans; native TP/SL remains active |
+| `bounded-run --cycles 2` | Legacy test runner before portfolio migration |
+| `agent --recover` | Reconcile pending legacy state without orders |
+| `reconcile runtime/demo-execution-….json` | Inspect a specific journal |
+| `execution-test --execute-demo-test` | Open/close a technical demo trade without an AI signal |
+| `ai-check --smoke-test` | Explicit AI connectivity test |
+| `evaluate-ai` | Synthetic AI schema evaluation |
+| `paper-bridge` | Send a proposal to the local paper ledger |
+| `reversion` | OU/Zeta research without orders |
+| `alerts --preview` | Local synthetic alert preview |
+| `alerts --test` | Send a test to enabled Telegram/Discord destinations |
+| `telegram --check` | Local remote configuration check |
+| `telegram` | Start the owner-only Telegram remote and register its menu |
 
-Modul juga dapat dipanggil langsung, misalnya
-`python3 -m hedging_tools.demo_runner --help`. Instalasi editable opsional:
-`python3 -m pip install -e .`, lalu `hedging-tools run ...`.
+Direct modules remain available, for example `python3 -m hedging_tools.demo_runner --help`. Optional editable installation: `python3 -m pip install -e .`, then `avar4ise run`. The legacy `hedging-tools` console alias remains available. See the [alert guide](alerts.md) and [remote guide](telegram-remote.md).
 
-Pengaturan channel dan token ada di [panduan alert](alerts.md).
+## Reports and shutdown
 
-## Hasil dan penghentian
+`run` stores state in `runtime/portfolio.sqlite3`, supervision reports in `runtime/portfolio-output.json`, and analysis in `runtime/research-output.json`. Never delete the ledger to bypass a risk block. The initial migration inherits the old `demo-strategy.sqlite3` budget; pending legacy activity must be reconciled first.
 
-Mode `run` menyimpan state pada `runtime/portfolio.sqlite3`, laporan pada
-`portfolio-output.json`, dan analisis pada `research-output.json`. Jangan menghapus
-ledger untuk menghilangkan blokir risiko. Budget lama di `demo-strategy.sqlite3`
-diwarisi pada awal migrasi, dan pending lama harus direkonsiliasi terlebih dahulu.
+Ctrl+C stops scanning and supervision. Confirmed native TP/SL remains at OKX, but stop adjustments after TP require the program. Restart `run` to resume management. See [portfolio rules](portfolio.md) for partial exits, daily loss, aggregate risk, and API recovery.
 
-Ctrl+C menghentikan scanning dan supervisor; posisi tetap memiliki TP/SL native
-terkonfirmasi. Pergeseran SL setelah TP memerlukan program aktif. Restart `run`
-untuk melanjutkan pengelolaan posisi. Lihat [aturan portfolio](portfolio.md) untuk
-TP bertahap, batas rugi harian, risiko gabungan, dan pemulihan saat API bermasalah.
+## Layout migration
 
-## Migrasi layout
+Legacy data moved from the root to `runtime/`; `.env` remains at the root. Development notes and pre-migration database backups are in Git-ignored `runtime/archive/`. Budget and history are not reset.
 
-Data lama dipindahkan dari root ke `runtime/`; `.env` tetap di root. Catatan
-pengembangan dan backup database sebelum migrasi ada di `runtime/archive/`,
-yang tidak ikut Git. Budget dan riwayat tidak direset.
-
-Untuk upload, gunakan file yang ditampilkan Git, bukan ZIP seluruh folder kerja
-yang dapat menyertakan `.env` dan data akun.
+For publishing, use Git-tracked files rather than a ZIP of the entire working directory, which may contain credentials and account data. The AVAR4ISE name does not rename the internal `hedging_tools` package or existing runtime files.

@@ -1,23 +1,17 @@
-# Eksperimen OU / Zeta
+# OU / Zeta experiment
 
-Referensi opsional ini tidak memengaruhi order bot.
+This optional experiment does not affect orders.
 
 ```sh
 python3 main.py reversion
 ```
 
-Modul membaca hingga 300 candle BTC/ETH 15 menit. Fit AR(1) memakai 120 log-close
-sebelumnya; candle scoring tidak ikut training. Guard phi dalam (0,1) bukan bukti
-statistik stasioneritas. SD stasioner = SD residual / sqrt(1−phi²); Zeta memakai
-Z-score tersebut dikali (1−phi)/(1+phi). Hurst R/S memakai return log training
-pada skala 8–40 bar. Ambang |Zeta| > 1,5 dan H < 0,45 masih hipotesis.
+The module reads up to 300 BTC/ETH 15-minute candles. AR(1) is fitted to the preceding 120 log closes; the scoring candle is excluded from training. Requiring phi in (0,1) is not statistical proof of stationarity. Stationary SD = residual SD / sqrt(1−phi²); Zeta multiplies that Z-score by (1−phi)/(1+phi). Hurst R/S uses training log returns at scales of 8–40 bars. Thresholds |Zeta| > 1.5 and H < 0.45 remain hypotheses.
 
-Diagnostik forward menggunakan horizon empat bar, kandidat non-overlap, dan
-asumsi biaya 0,2%. Belum ada simulasi fill, stop intrabar, leverage, funding atau
-portfolio. Sampel pendek tidak cukup untuk menilai profitabilitas.
+Forward diagnostics use a four-bar horizon, non-overlapping candidates, and assumed costs of 0.2%. They do not simulate fills, intrabar stops, leverage, funding, or portfolio interactions. Short samples cannot establish profitability.
 
-Referensi:
+References:
 
 - [AR(1), Penn State](https://online.stat.psu.edu/stat510/Lesson01)
-- [Bias estimasi Hurst](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2006WR005111)
+- [Hurst estimation bias](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2006WR005111)
 - [OKX API](https://www.okx.com/docs-v5/)

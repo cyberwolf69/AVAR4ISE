@@ -35,7 +35,7 @@ class OKXPublic:
     def get(self, endpoint, **params):
         path = self.ENDPOINTS[endpoint]
         request = Request("https://www.okx.com" + path + "?" + urlencode(params),
-                          headers={"User-Agent": "HedgingTools-PublicScanner/0.1"})
+                          headers={"User-Agent": "AVAR4ISE-PublicScanner/0.1"})
         for attempt in range(3):
             try:
                 with self.opener(request, timeout=10, context=self.context) as response:

@@ -1,46 +1,38 @@
-> Mode `run` kini memakai portfolio persisten lima posisi. Lihat [portfolio](portfolio.md)
-> untuk alur aktif. Penjelasan executor satu posisi di bawah merupakan jalur tes legacy.
+# Architecture
 
-# Arsitektur
+The active `run` command uses a persistent five-position portfolio; see the [portfolio guide](portfolio.md). The single-position executor described below is a legacy test path.
 
-Alur: market publik → screening → headline → proposal AI tervalidasi → kontrol
-risiko → OKX Demo → pengawasan posisi → rekonsiliasi → settlement budget.
+Flow: public market data → screening → optional headlines → validated AI proposal → risk checks → OKX Demo → position supervision → reconciliation → budget settlement.
 
-| Modul | Tanggung jawab |
+| Module | Responsibility |
 |---|---|
-| `okx_public`, `scanner`, `scan` | Data publik dan screening |
-| `news`, `analyst`, `ai_client`, `research` | Bukti headline, AI, validasi proposal |
-| `risk_engine`, `paper`, `paper_bridge` | Risiko dan ledger simulasi lokal |
-| `okx_demo` | Signed demo request pada route terbatas |
-| `demo_execution`, `demo_monitor` | Entry, SL, target lokal 2R, time exit, cleanup |
-| `reconcile_demo` | Bukti fill/fee/PnL dan pengaitan order native stop |
-| `demo_agent` | Budget, satu siklus, daily halt, recovery, cooldown |
-| `demo_runner` | Loop terbatas, kunci proses, riwayat siklus |
-| `paths` | Lokasi konfigurasi dan runtime |
+| `okx_public`, `scanner`, `scan` | Public data and screening |
+| `news`, `analyst`, `ai_client`, `research` | Headline evidence, AI, proposal validation |
+| `risk_engine`, `paper`, `paper_bridge` | Risk and local simulation ledger |
+| `okx_demo` | Signed demo requests on restricted routes |
+| `demo_execution`, `demo_monitor` | Legacy entry, SL, local 2R target, timed exit, cleanup |
+| `reconcile_demo` | Fill/fee/PnL evidence and native-stop order linkage |
+| `demo_agent` | Legacy budget, single cycle, daily halt, recovery, cooldown |
+| `demo_runner` | Legacy bounded loop, process lock, cycle history |
+| `portfolio`, `portfolio_runner` | Persistent portfolio, split TP/SL management, supervision |
+| `controls`, `telegram_remote` | Runtime settings and owner-only remote |
+| `paths` | Configuration and runtime locations |
 
-## Kontrol
+## Controls
 
-AI tidak dapat mengubah batas risiko. Leverage demo mencoba 30x turun ke 10x,
-dibatasi instrumen dan risiko stop plus estimasi biaya 0,2% notional. Uji teknis
-tanpa sinyal tetap 10x. Entry IOC memakai attached SL; exit bot reduce-only.
-Monitor memeriksa posisi aktual, stop live, mark price, dan buffer likuidasi.
+The AI cannot change risk limits. Demo leverage searches from the allowed maximum down to the allowed minimum, initially 30x to 10x, constrained by instrument limits and stop risk plus an estimated 0.2% notional cost. Technical tests without a signal remain at 10x. The legacy IOC entry attaches an SL; bot exits are reduce-only. Its monitor checks actual position state, live stops, mark price, and liquidation buffer. Active portfolio execution uses FOK and split native TP/SL.
 
-Settlement mencocokkan seluruh fill exit (termasuk native stop) dengan entry,
-serta perubahan equity dengan PnL setelah fee. Bukti disimpan atomik. Pending,
-batas rugi, proposal terpakai dan cooldown bertahan setelah restart. Kunci proses
-mencegah agent, runner, dan recovery berjalan bersamaan.
+Legacy settlement matches all exit fills, including native stops, with the entry and reconciles equity changes against PnL after fees. Evidence is saved atomically. Pending activity, loss limits, consumed proposals, and cooldowns persist across restarts. A process lock prevents concurrent legacy agent, runner, and recovery operations.
 
-## Keterbatasan
+## Limits
 
-- Belum daemon 24/7 dan belum ada bukti profitabilitas strategi.
-- Target 2R/time exit berjalan lokal; hanya SL berada di exchange.
-- Harga likuidasi aktual tersedia setelah entry. Gap/slippage dapat melampaui risk.
-- Funding belum dipisahkan otomatis dari perubahan equity saat settlement.
-- Recovery memblokir perpindahan hari dan bukti yang tidak lengkap.
-- Sebagian batas demo masih konstanta; JSON terutama untuk paper/screening.
-- Pengujian native stop terpicu dan multi-trade belum lengkap di exchange.
-- Paket ditujukan untuk checkout lokal/editable: `.env` dan `runtime/` relatif
-  ke root checkout, bukan direktori kerja shell.
+- No established strategy profitability or managed 24/7 daemon.
+- In the legacy path, 2R targets/timed exits are local; only SL resides at the exchange. Active portfolio behavior differs as documented above.
+- Actual liquidation prices are available after entry; gaps/slippage can exceed planned risk.
+- Legacy settlement does not automatically separate funding from equity changes. Active portfolio reconciliation records attributable funding.
+- Legacy recovery blocks day rollover and incomplete evidence.
+- Some demo limits remain constants; JSON configuration mainly serves paper/screening.
+- Exchange verification of triggered native stops and multiple trades remains incomplete.
+- The package targets local/editable checkouts: `.env` and `runtime/` are relative to the checkout, not the shell's working directory.
 
-Tes tidak membutuhkan key atau jaringan. CI dikonfigurasi untuk Python 3.11–3.14;
-hasil CI baru tersedia setelah workflow dijalankan di GitHub.
+Tests require no keys or network. CI is configured for Python 3.11–3.14; GitHub results are available only after the workflow runs.

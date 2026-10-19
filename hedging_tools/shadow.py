@@ -11,6 +11,7 @@ import sqlite3
 import uuid
 from unittest.mock import patch
 from hedging_tools import structure
+from hedging_tools.controls import Controls
 from hedging_tools.structure_audit import break_bias
 from hedging_tools.scanner import screen
 from hedging_tools.analyst import make_packet
@@ -54,6 +55,8 @@ class Shadow:
                 cursor=int(row[0])
                 records=source.execute('SELECT id,raw_json,result_json FROM scans WHERE id>? ORDER BY id LIMIT 200',(cursor,)).fetchall()
                 config=json.loads(CONFIG_PATH.read_text())
+                controls=Controls().read()
+                config.update(min_leverage=controls['min_leverage'],max_leverage=controls['max_leverage'],margin_per_trade=controls['margin'])
                 detector=structure.trend
                 for ident,raw_json,result_json in records:
                     raw=json.loads(raw_json);previous=json.loads(result_json)
@@ -85,6 +88,15 @@ class Shadow:
                     db.execute("UPDATE meta SET value=? WHERE key='cursor'",(str(ident),))
         return {'status':'CHECKED','scans_consumed':len(records)}
 
+    def outcomes_due(self, now=None):
+        now = now or datetime.now(timezone.utc)
+        with closing(sqlite3.connect(self.path)) as db, db:
+            row = db.execute("SELECT value FROM meta WHERE key='last_outcome_poll'").fetchone()
+            if row and now.timestamp() - float(row[0]) < 60:
+                return False
+            db.execute("INSERT OR REPLACE INTO meta VALUES ('last_outcome_poll',?)", (str(now.timestamp()),))
+        return True
+
     def report(self):
         with closing(sqlite3.connect(self.path)) as db:
             meta=dict(db.execute('SELECT key,value FROM meta'))
@@ -114,9 +126,10 @@ def main():
         updates={}
         if args.update:
             updates['collection']=shadow.collect()
-            client=OKXPublic()
-            for model,history in shadow.histories.items():
-                updates[model]=history.update(client,max_pairs=5)
+            if shadow.outcomes_due():
+                client=OKXPublic()
+                for model,history in shadow.histories.items():
+                    updates[model]=history.update(client,max_pairs=5)
         report={**shadow.report(),'updates':updates}
         target=RUNTIME_DIR/'shadow-output.json'
         tmp=target.with_suffix('.'+uuid.uuid4().hex+'.tmp')

@@ -1,17 +1,17 @@
-# Audit kandidat struktur — 19 Oktober 2026
+# Structure candidate audit — October 19, 2026
 
-Audit offline membaca 2.000 baris terakhir dari scans.sqlite3 secara read-only. Sebanyak 1.377 observasi memiliki hasil model struktur dan dapat dibandingkan; 623 lainnya tidak memiliki marker model struktur (termasuk error sebelum deteksi struktur dan hasil model lain). Rentang observasi yang dibandingkan: **13:45–19:05 WIB**. Snapshot candle yang berulang bukan sampel independen.
+This offline audit read the latest 2,000 rows from `scans.sqlite3` without modifying it. Of these, 1,377 observations contained structure-model results and were comparable; 623 lacked the model marker, including errors before structure detection and other model results. Comparable observations span **13:45–19:05 WIB**. Repeated candle snapshots are not independent samples.
 
-| Model | Observasi lolos scanner | Setup BOS unik |
+| Model | Scanner-eligible observations | Unique BOS setups |
 |---|---:|---:|
-| HH/HL atau LH/LL saat ini | 0 | 0 |
-| Hipotesis arah dari close-break swing 1H terkonfirmasi | 23 | 6 |
+| Active HH/HL or LH/LL definition | 0 | 0 |
+| Confirmed 1H swing close-break direction hypothesis | 23 | 6 |
 
-Alternatif menetapkan arah ketika close melintasi pivot 1H yang telah tersedia sebelum candle tersebut. Arah dipertahankan sampai swing pelindung ditembus; break berlawanan dapat mengubah arah. Setiap pivot hanya dipakai sekali. Ini hipotesis riset, bukan bukti aktivitas institusi. Deteksi BOS/retest 15m, batas entry 0.75 ATR, stop struktur, spread, kesegaran data, dan pemeriksaan ukuran risiko scanner sama untuk kedua model.
+The alternative sets direction when a close crosses a 1H pivot available before that candle. Direction persists until the protective swing breaks; an opposite break can reverse it. Each pivot is consumed once. This is a research hypothesis, not proof of institutional activity. Both models share 15m BOS/retest detection, the 0.75 ATR entry-distance limit, structure stops, spread/freshness checks, and scanner sizing checks.
 
-Kandidat pertama per event pada alternatif:
+First alternative candidate per event:
 
-| Pair | Arah | Waktu observasi pertama (WIB) |
+| Pair | Direction | First observation (WIB) |
 |---|---|---|
 | HYPE | LONG | 14:00 |
 | FIL | LONG | 14:00 |
@@ -20,18 +20,18 @@ Kandidat pertama per event pada alternatif:
 | BTC | LONG | 16:48 |
 | LIT | SHORT | 16:48 |
 
-Sebanyak 1.126 observasi tertahan di definisi struktur 1H model aktif. Pada alternatif, 842 observasi tertahan karena BOS 15m sudah kedaluwarsa. Jadi memperbaiki pengenalan arah tidak otomatis menghasilkan entry pada semua pair.
+The active model rejected 1,126 observations at its 1H structure definition. The alternative rejected 842 because the 15m BOS had expired. Changing direction recognition does not automatically produce entries for every pair.
 
-## Batas kesimpulan
+## Interpretation limits
 
-Ini audit ketersediaan kandidat, **bukan backtest PnL**. Tidak ada pemanggilan AI, validasi saldo/slot akun saat itu, simulasi fill, notifikasi, atau order. Keenam kandidat belum bisa disebut transaksi layak atau menang. Risiko scanner memperhitungkan batas ukuran, tetapi bukan seluruh gate eksekusi portfolio. Tidak ada pemilihan parameter berdasarkan profit pada data ini.
+This is a candidate-availability audit, **not a PnL backtest**. It makes no AI calls, historical account/slot checks, fill simulations, notifications, or orders. The six candidates are not established executable or winning trades. Scanner sizing is not the complete portfolio risk gate. Parameters were not selected using profit from this dataset.
 
-Strategi aktif **belum berubah**. Langkah yang disarankan adalah menjalankan alternatif sebagai pembanding tanpa eksekusi pada data baru, mencatat outcome dengan biaya dan urutan TP/SL yang benar, kemudian mengusulkan perubahan setelah hasilnya tersedia. Jumlah sinyal saja bukan alasan mengaktifkan model.
+The active structure definition remains unchanged. The proposed next step was forward comparison without execution, followed by outcome evaluation with costs and correct TP/SL sequencing before proposing activation. Candidate count alone does not justify adoption.
 
-## Mengulang audit
+## Reproducing the audit
 
 ```sh
 python3 -B -m hedging_tools.structure_audit --limit 2000
 ```
 
-Perintah membaca database lokal dan menulis runtime/structure-audit.json. Karena memakai baris terbaru, hasil bisa berbeda setelah database bertambah. Laporan JSON mencatat ID scan pertama setiap event, waktu, level, ukuran, alasan penolakan, serta transisi antar-model. Database sumber tidak dimodifikasi. Modul riset berdiri sendiri dan tidak diimpor runner trading.
+The command reads the local database and writes `runtime/structure-audit.json`. Results can change as new rows arrive. The report records each event's first scan ID, time, levels, size, rejection reasons, and model transitions. The source database is unchanged. This standalone research module is not imported by the trading runner.

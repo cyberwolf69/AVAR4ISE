@@ -111,3 +111,9 @@ class ShadowTests(unittest.TestCase):
                 db.execute("UPDATE meta SET value='0' WHERE key='cursor'")
             self.shadow.collect(NOW+timedelta(seconds=30))
         self.assertEqual(len(self.shadow.histories['break_bias'].records()),1)
+
+    def test_outcomes_poll_is_throttled_across_restart(self):
+        self.assertTrue(self.shadow.outcomes_due(NOW))
+        other=Shadow(self.root/'shadow',self.source,'test')
+        self.assertFalse(other.outcomes_due(NOW+timedelta(seconds=10)))
+        self.assertTrue(other.outcomes_due(NOW+timedelta(seconds=60)))

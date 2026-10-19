@@ -4,7 +4,8 @@ import json
 import sqlite3
 import time
 import uuid
-from contextlib import closing
+from contextlib import closing, nullcontext
+from hedging_tools.controls import DEFAULT
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from hedging_tools.analyst import validate_proposal
@@ -76,13 +77,13 @@ def refresh_budget(state, now):
     return equity
 
 
-def entry_allowance(state, pair, exchange_positions, orders):
+def entry_allowance(state, pair, exchange_positions, orders, max_positions=MAX_POSITIONS):
     if state['halted']:
         return D(0), 'DAILY_LOSS_LIMIT'
     ours = active(state)
     exchange_pairs = {p['instId'] for p in exchange_positions if D(p['pos'])}
     reserved_pairs = {p['pair'] for p in ours}
-    if len(exchange_pairs | reserved_pairs) >= MAX_POSITIONS:
+    if len(exchange_pairs | reserved_pairs) >= min(MAX_POSITIONS, max_positions):
         return D(0), 'POSITION_SLOTS_FULL'
     if pair in exchange_pairs | reserved_pairs:
         return D(0), 'PAIR_ALREADY_OPEN'
@@ -100,7 +101,8 @@ def entry_allowance(state, pair, exchange_positions, orders):
 
 
 class Portfolio:
-    def __init__(self, store, client, public, clock=None):
+    def __init__(self, store, client, public, clock=None, controls=None):
+        self.controls = controls
         self.store, self.client, self.public = store, client, public
         self.clock = clock or (lambda: datetime.now(timezone.utc))
 
@@ -344,9 +346,16 @@ class Portfolio:
         state['errors'] = errors
         self.save(state)
         return {'status': 'MANAGING' if not errors else 'ENTRY_BLOCKED', 'active_positions': len(active(state)),
-                'max_positions': MAX_POSITIONS, 'equity': state['equity'], 'daily_halted': state['halted'], 'errors': errors}
+                'max_positions': self.controls.read()['max_positions'] if self.controls else MAX_POSITIONS, 'equity': state['equity'], 'daily_halted': state['halted'], 'errors': errors}
 
     def enter(self, envelope, analysis):
+        with self.controls.locked() if self.controls else nullcontext():
+            settings = self.controls.read() if self.controls else dict(DEFAULT)
+            if not settings["entries_enabled"]:
+                return {"status": "WAIT", "reason": "ENTRIES_PAUSED_BY_OWNER"}
+            return self._enter(envelope, analysis, settings)
+
+    def _enter(self, envelope, analysis, settings):
         if analysis.get('status') != 'VALIDATED':
             return {'status': 'WAIT', 'reason': analysis.get('reason', analysis.get('status', 'INVALID_ANALYSIS')),
                     'screen_reasons': analysis.get('screen_reasons', [])}
@@ -366,7 +375,7 @@ class Portfolio:
             raise DemoError('Portfolio requires net position mode')
         positions = self.client.get('positions', instType='SWAP')
         pending = self.client.get('orders', instType='SWAP')
-        limit, reason = entry_allowance(state, signal['pair'], positions, pending)
+        limit, reason = entry_allowance(state, signal['pair'], positions, pending, settings['max_positions'])
         if limit <= 0:
             return {'status': 'WAIT', 'reason': reason}
         own_ids = {p['id'] + suffix for p in active(state) for suffix in ('s', 't1', 't2', 't3')}
@@ -383,7 +392,8 @@ class Portfolio:
         if not fresh_age(self.clock().timestamp() - int(ticker['ts']) / 1000, 30):
             raise DemoError('Stale entry quote')
         try:
-            details = plan(instrument, ticker, signal, str(limit), allowed_pairs=(signal['pair'],))
+            details = plan(instrument, ticker, signal, str(limit), allowed_pairs=(signal['pair'],),
+                           margin=settings['margin'], min_leverage=settings['min_leverage'], max_leverage=settings['max_leverage'])
             sizes = split_size(details['size'], instrument['lotSz'], instrument['minSz'])
             prices = targets(details['limit_price'], details['stop'], details['direction'], instrument['tickSz'])
         except ValueError as exc:
@@ -392,6 +402,7 @@ class Portfolio:
         p = dict(details, id=prefix, status='ENTRY_PENDING', pnl='0', upl='0',
                  tick=instrument['tickSz'], unit=str(D(instrument['ctVal']) * D(instrument['ctMult'])),
                  legs=[{'size': str(sz), 'price': str(px)} for sz, px in zip(sizes, prices)])
+        p['entry_controls'] = settings
         p['entry_evidence'] = snapshot(envelope, analysis['proposal'], self.clock(), ticker)
         p['entry_evidence']['risk_context'] = {k: state[k] for k in ('equity', 'day_start', 'day', 'halted')}
         p['entry_evidence']['risk_context'].update(active_positions=len(active(state)), available_risk=str(limit))

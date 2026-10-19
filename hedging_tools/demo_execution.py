@@ -20,7 +20,9 @@ class NoTrade(ValueError):
     """Execution declined before any order mutation."""
 
 
-def plan(instrument, ticker, signal=None, risk_budget="1", allowed_pairs=PAIRS):
+def plan(instrument, ticker, signal=None, risk_budget="1", allowed_pairs=PAIRS, margin="5", min_leverage=10, max_leverage=30):
+    if not (type(min_leverage) is int and type(max_leverage) is int and 10 <= min_leverage <= max_leverage <= 30 and 1 <= number(margin) <= 5):
+        raise ValueError("Settings exceed hard risk limits")
     pair = signal["pair"] if signal else "BTC-USDT-SWAP"
     direction = signal["action"] if signal else "LONG"
     if direction not in ("LONG", "SHORT") or pair not in allowed_pairs:
@@ -44,9 +46,9 @@ def plan(instrument, ticker, signal=None, risk_budget="1", allowed_pairs=PAIRS):
         raise ValueError("No trade fits demo test limits")
     # Experiment: fit a maximum $5 margin to the stop-based risk cap, after lot rounding.
     # Keep the independent technical smoke test at 10x.
-    cap = min(30, int(number(instrument['lever']))) if signal else 10
-    for leverage in range(cap, 9, -1):
-        quantity = (number(5 * leverage) / (sizing_price * unit) / lot).to_integral_value(rounding=ROUND_FLOOR) * lot
+    cap = min(max_leverage, int(number(instrument['lever']))) if signal else 10
+    for leverage in range(cap, (min_leverage if signal else 10)-1, -1):
+        quantity = (number(margin) * leverage / (sizing_price * unit) / lot).to_integral_value(rounding=ROUND_FLOOR) * lot
         notional = quantity * unit * sizing_price
         risk = quantity * unit * abs(price - stop) + notional * number("0.002")
         if quantity < minimum or risk > min(number(1), number(risk_budget)):

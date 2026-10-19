@@ -6,8 +6,11 @@ from hedging_tools.paths import PROJECT_ROOT
 
 
 class HistoryWorker:
-    def __init__(self, clock=time.monotonic, launch=subprocess.Popen, module='hedging_tools.signal_history', arguments=('--update',)):
+    def __init__(self, clock=time.monotonic, launch=subprocess.Popen, module='hedging_tools.signal_history', arguments=('--update',), interval=60):
         self.clock, self.launch = clock, launch
+        if interval < 5:
+            raise ValueError("Worker interval must be at least 5 seconds")
+        self.interval = interval
         self.module, self.arguments = module, arguments
         self.child = None
         self.started, self.next_run = 0, 0
@@ -20,14 +23,14 @@ class HistoryWorker:
                     self.child.kill()
                 return
             self.child = None
-            self.next_run = now + 60
+            self.next_run = now + self.interval
         if now >= self.next_run:
             try:
                 self.child = self.launch([sys.executable, '-B', '-m', self.module, *self.arguments],
                                          cwd=PROJECT_ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 self.started = now
             except OSError:
-                self.next_run = now + 60
+                self.next_run = now + self.interval
 
     def close(self):
         if self.child is not None:

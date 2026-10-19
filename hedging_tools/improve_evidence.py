@@ -1,12 +1,17 @@
 """Small allowlisted evidence snapshots; never captures configuration secrets."""
 import hashlib
+import json
+from hedging_tools.controls import Controls
 from datetime import datetime, timezone
 from hedging_tools.paths import PACKAGE_DIR, CONFIG_PATH
 
 
 def strategy_version():
-    paths = [CONFIG_PATH] + [PACKAGE_DIR/name for name in ('market_time.py', 'regime.py', 'structure.py', 'scanner.py', 'position_policy.py', 'demo_execution.py', 'portfolio.py', 'analyst.py', 'universe.py', 'research.py')]
-    return hashlib.sha256(b'\n'.join(path.read_bytes() for path in paths)).hexdigest()[:16]
+    paths = [CONFIG_PATH] + [PACKAGE_DIR/name for name in ('controls.py', 'market_time.py', 'regime.py', 'structure.py', 'scanner.py', 'position_policy.py', 'demo_execution.py', 'portfolio.py', 'analyst.py', 'universe.py', 'research.py')]
+    policy = Controls().read()
+    policy.pop('revision', None)
+    policy.pop('entries_enabled', None)
+    return hashlib.sha256(b'\n'.join(path.read_bytes() for path in paths) + json.dumps(policy, sort_keys=True).encode()).hexdigest()[:16]
 
 
 def snapshot(envelope, proposal, now=None, ticker=None):

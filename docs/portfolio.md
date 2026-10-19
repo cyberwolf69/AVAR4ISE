@@ -1,89 +1,46 @@
-# Portfolio OKX Demo
+# OKX Demo portfolio
 
-`python3 main.py run` sekarang berjalan sampai Ctrl+C. Maksimal **5 posisi aktif**,
-satu posisi per pair. Scanner memilih hingga 20 perpetual USDT kripto secara
-dinamis; lihat [discovery dan pelacakan sinyal](discovery-and-signals.md).
-Setiap instrumen tetap harus tersedia/live di akun demo, lolos screening, memiliki
-headline relevan, dan mendapat proposal AI valid. Lima slot adalah kapasitas,
-bukan target jumlah posisi yang harus dipaksakan.
+`python3 main.py run` continues until Ctrl+C and supports at most **five active positions**, one per pair. The scanner dynamically selects up to 20 crypto USDT perpetuals; see [discovery and tracking](discovery-and-signals.md). Instruments must be available/live in demo, pass screening, and receive a valid AI proposal. News is optional for technical setups. Five slots are a capacity limit, not a target to force.
 
-## Aturan posisi
+## Position rules
 
-- Margin maksimal 5 USDT, leverage 10–30x, risiko entry maksimal 1 USDT.
-- TP1/TP2/TP3: 1R/2R/3R, pembagian awal 40%/35%/25%.
-- Kuantitas dibulatkan ke lot exchange; sisa pembulatan masuk TP3. Jika tidak bisa
-  dibagi menjadi tiga order dengan ukuran minimum yang valid, entry ditolak.
-- TP native dipasang bersama entry FOK dan SL native, menggunakan harga mark.
-  Harga TP dihitung dari harga limit entry dan SL awal sebelum submit; fill yang
-  lebih baik dapat mengubah R aktual. Alert memakai harga referensi snapshot.
-- Setelah fill TP1 terkonfirmasi, SL digeser ke entry aktual ± buffer biaya 0,2%.
-  Setelah TP2, SL digeser minimal ke profit 1R. Buffer biaya tidak menjamin BEP
-  bersih saat slippage, fee atau funding lebih tinggi dari perkiraan.
-- Jika harga sudah melewati SL baru saat pengawasan berjalan, agent mengirim
-  exit market reduce-only. Stop tidak pernah dilonggarkan.
-- TP1/TP2 tetap memakai slot. Slot bebas setelah seluruh posisi tertutup, fill
-  dan fee cocok, serta sisa algo milik posisi telah dibatalkan.
-- Tidak ada lagi exit karena batas holding 60 detik. Masa berlaku sinyal membatasi
-  entry saja; posisi yang telah terbuka dikelola sampai TP/SL/exit proteksi.
+- Maximum margin 5 USDT, leverage 10–30x, and entry risk 1 USDT.
+- TP1/TP2/TP3 at 1R/2R/3R, initially allocated 40%/35%/25%.
+- Quantities are rounded to exchange lots; rounding remainder goes to TP3. Entry is rejected if three valid minimum-size orders cannot be formed.
+- Native TP and SL attach to the FOK entry using mark-price triggers. TP prices use the entry limit price and initial SL before submission; better fills can change actual R. Alerts use snapshot reference prices.
+- After a confirmed TP1 fill, SL moves to actual entry ±0.2% cost buffer. After TP2, it moves to at least 1R profit. The buffer does not guarantee net breakeven when slippage, fees, or funding exceed estimates.
+- If price has crossed the new stop by the time supervision checks it, the agent submits a reduce-only market exit. Stops are never loosened.
+- Partial TP1/TP2 exits still occupy a slot. A slot becomes free only when the entire position closes, fills/fees reconcile, and remaining position-owned algo orders are canceled.
+- There is no 60-second holding-time exit. Signal expiry limits entry only; opened positions remain managed until TP, SL, or a protective exit.
 
-## Batas rugi dan publikasi
+## Daily loss and publishing
 
-Budget awal 50 USDT diwarisi dari ledger lama (bukan direset ke 50). Equity
-strategi dihitung dari fill/PnL/fee milik agent, funding terkait, dan unrealized
-PnL posisi aktif; tidak mengambil seluruh saldo demo. Risiko sisa menuju stop
-semua posisi dicadangkan sebelum entry baru, termasuk estimasi biaya keluar.
+The initial 50 USDT strategy budget is inherited from the legacy ledger rather than reset. Strategy equity uses agent-owned fills/PnL/fees, attributable funding, and unrealized PnL; it does not use the full demo balance. Remaining stop risk across open positions, including estimated exit costs, is reserved before new entries.
 
-Kerugian mencapai 10% baseline hari WIB mengunci **entry baru** sampai hari
-berikutnya, walaupun harga pulih di hari yang sama. Pengelolaan posisi dan
-pencarian/publikasi sinyal tetap berjalan. Baseline pergantian hari menggunakan
-nilai yang lebih tinggi antara snapshot terakhir dan snapshot pertama hari baru,
-agar loss selama jeda/restart tidak terhapus. Ini konservatif, bukan rekonstruksi
-harga persis tengah malam. Pengawasan berbasis polling tidak menangkap setiap tick.
+Loss reaching 10% of the WIB daily baseline latches **new entries** off until the next day, even if equity recovers that day. Management, scanning, and publishing continue. Day rollover uses the higher of the previous snapshot and the first new-day snapshot so restart gaps do not erase losses. This is conservative, not an exact midnight reconstruction. Polling does not observe every tick.
 
-Semua card signal memakai format sama tanpa label slot penuh, signal only, atau
-status order. Pengiriman sinyal bukan bukti order terisi. Alasan entry ditolak
-hanya muncul di output internal. Branding klik: Powered by [𝕏 web3rai](https://www.x.com/web3rai).
+Signal cards share one format without slot-full, signal-only, or order-status labels. Publication does not prove a fill. Entry rejection reasons remain in internal output. The footer links to Powered by [𝕏 web3rai](https://www.x.com/web3rai).
 
-## Menjalankan dan menghentikan
+## Running and stopping
 
 ```sh
 python3 main.py run
-# Opsional: berhenti setelah dua scan selesai
+# Optional: stop after two completed scans
 python3 main.py run --cycles 2
-# Interval scan dan pemeriksaan posisi
+# Scan and supervision delays
 python3 main.py run --interval 60 --poll 5
 ```
 
-Riset berjalan sebagai subprocess sehingga supervisor dapat memantau posisi
-selama AI menunggu respons. `--poll 5` adalah jeda antar pemeriksaan, bukan jaminan
-latensi 5 detik; permintaan jaringan juga membutuhkan waktu.
+Research runs in a subprocess so position supervision continues while AI requests wait. `--poll 5` is a delay between checks, not a guaranteed five-second response time; network requests add latency.
 
-**Ctrl+C tidak menutup posisi.** TP/SL native yang telah terkonfirmasi tetap berada
-di OKX. Saat program mati, SL tidak naik otomatis setelah TP1/TP2; restart
-`run` untuk melanjutkan pemeriksaan dan pergeseran SL. Jangan menghapus ledger
-atau menjalankan bot lain pada pair yang sama. Gunakan akun demo khusus agent.
-Posisi manual turut memakai kapasitas; exposure/order yang tidak dikenal memblokir
-entry baru dan tidak diambil alih atau ditutup otomatis oleh bot.
+**Ctrl+C does not close positions.** Confirmed native TP/SL remains at OKX. Automatic stop adjustments after TP1/TP2 require a running supervisor. Restart `run` to resume. Do not delete the ledger or run another bot on the same pairs. Use a dedicated demo account. Manual positions count toward capacity; unknown exposure/orders block entries and are not automatically adopted or closed.
 
-State: `runtime/portfolio.sqlite3`; laporan: `runtime/portfolio-output.json` dan
-`runtime/research-output.json`. State menyimpan identitas order sebelum submit.
-Restart selalu merekonsiliasi identitas tersebut. Submit timeout/penolakan yang
-belum dapat dibuktikan tidak dicoba ulang secara buta. Jika status tetap
-`ENTRY_BLOCKED`, periksa error/jurnal dan akun OKX; jangan menghapus state untuk
-membuka blokir. Posisi lain tetap diusahakan untuk dikelola.
+State: `runtime/portfolio.sqlite3`. Reports: `runtime/portfolio-output.json` and `runtime/research-output.json`. Order identities are stored before submission and reconciled on restart. Unproven timeouts/rejections are not blindly retried. If `ENTRY_BLOCKED` persists, inspect errors, journals, and OKX; do not delete state to bypass it. Management of other positions continues where possible.
 
-Gap data funding lebih dari enam hari memblokir entry dan memerlukan rekonsiliasi
-manual. Tidak ada reset otomatis saat bukti eksekusi/fee/funding tidak lengkap.
-Legacy `agent --once`/`bounded-run` tidak dipakai lagi setelah ledger portfolio
-terbentuk; `agent --recover` tetap tersedia untuk pending lama sebelum migrasi.
+Funding gaps exceeding six days block entries and require manual reconciliation. Missing execution/fee/funding evidence is not automatically reset. Legacy `agent --once`/`bounded-run` cannot be used after the portfolio ledger exists; `agent --recover` remains available for pending activity before migration.
 
-## Validasi
+## Validation
 
-Tes offline mencakup slot penuh/slot kosong, daily halt, TP bertahap, SL naik,
-restart, order ambigu, budgeting gabungan, fee/funding, dan publikasi saat halt.
-Integrasi native split-TP baru belum diverifikasi melalui order OKX Demo sungguhan.
-Implementasi tidak memaksa trade sintetis saat sinyal pasar belum lolos.
+Offline tests cover full/free slots, daily halt, split TP, stop adjustments, restart, ambiguous orders, combined risk, fees/funding, and publication during a halt. The native split-TP integration has not yet been verified through actual OKX Demo orders. The agent does not force synthetic trades when market signals fail checks.
 
-Parameter API mengacu pada [dokumentasi resmi OKX](https://www.okx.com/docs-v5/en/):
-attached split TP/SL, amend algo, order details, serta funding bills. State
-lokal dan respons exchange sama-sama diperlukan untuk konfirmasi eksekusi.
+API parameters follow [official OKX documentation](https://www.okx.com/docs-v5/en/) for attached split TP/SL, algo amendments, order details, and funding bills. Both local state and exchange responses are required to confirm execution.

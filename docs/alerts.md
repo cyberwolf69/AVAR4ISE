@@ -1,23 +1,14 @@
-# Alert Telegram dan Discord
+# Telegram and Discord alerts
 
-Alert dikirim otomatis dari `research --ai`, termasuk riset yang dipanggil oleh
-`agent`/`run`, bila proposal LONG/SHORT lolos validasi AI. WAIT, data error dan
-proposal kedaluwarsa tidak dikirim. Fitur ini terpisah dari izin eksekusi: pesan
-tidak menampilkan label slot penuh atau status eksekusi. Pemeriksaan akun masih
-dapat menolak entry; alert tidak berarti order sudah terisi.
+Alerts are sent automatically by `research --ai`, including research launched by `agent`/`run`, when a LONG/SHORT proposal passes AI validation. WAIT, data errors, and expired proposals are not published. Publishing is independent of execution permission: cards do not display slot availability or execution labels. Account checks may still reject an entry; an alert does not confirm a fill.
 
-Isi pesan: pair/arah, entry dan SL referensi, TP1/TP2/TP3 pada 1R/2R/3R, batas risiko,
-alasan AI, invalidasi, nama sumber headline, dan waktu kedaluwarsa WIB. Tidak ada
-confidence/peluang menang yang dibuat-buat. Target dihitung dari snapshot; target
-posisi aktual dihitung dari harga limit entry; SL lanjutan memakai fill aktual. Alert bukan konfirmasi fill atau exit.
+Cards contain the pair, direction, reference entry/SL, TP1/TP2/TP3 at 1R/2R/3R, risk limits, AI rationale, invalidation, headline source names, and expiration in WIB (UTC+7). No invented confidence or win probability is shown. Signal targets use the snapshot; actual position targets use the entry limit price, and subsequent stop adjustments use the actual fill.
 
-Riwayat hasil setiap sinyal tersedia melalui `python3 main.py signals`.
-Lihat [model pelacakan](discovery-and-signals.md); hasil referensi tidak sama dengan
-PnL order. Tracker tidak menambahkan label atau mengedit card channel.
+Inspect reference outcomes with `python3 main.py signals`. See [signal tracking](discovery-and-signals.md). The tracker does not edit published cards or equate reference outcomes with trade PnL.
 
-## Konfigurasi
+## Configuration
 
-Isi di `.env` lokal (jangan kirim token/webhook ke chat atau commit ke Git):
+Store credentials locally in `.env`; never send tokens/webhooks in chat or commit them:
 
 ```dotenv
 ALERTS_ENABLED=true
@@ -27,52 +18,31 @@ TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 ```
 
-Untuk satu tujuan saja, gunakan `ALERT_CHANNELS=discord` atau `telegram`.
+Use `ALERT_CHANNELS=discord` or `telegram` for a single destination.
 
-**Discord:** buat incoming webhook untuk text channel tujuan melalui pengaturan
-server/channel → Integrations → Webhooks. Salin URL HTTPS `discord.com/api/webhooks/...`
-ke `DISCORD_WEBHOOK_URL`. Forum/thread-specific webhook belum didukung.
+**Discord:** create an incoming webhook under server/channel settings → Integrations → Webhooks. Set `DISCORD_WEBHOOK_URL` to its HTTPS `discord.com/api/webhooks/...` URL. Forum/thread-specific webhooks are not supported.
 
-**Telegram:** buat bot melalui BotFather, isi tokennya, lalu tambahkan bot sebagai
-administrator channel dengan izin posting. Isi `TELEGRAM_CHAT_ID` dengan username
-channel publik, misalnya `@nama_channel`, atau numeric chat ID untuk channel privat.
-Bot ini hanya mengirim alert; tidak menerima perintah trading dari Telegram.
-
-## Preview dan uji koneksi
+**Telegram:** create a bot through BotFather and add it as a channel administrator with posting permission. Set `TELEGRAM_CHAT_ID` to the public channel username, such as `@example_channel`, or the private channel's numeric ID. The alert module only sends messages. Owner commands are handled by the separately configured [Telegram remote](telegram-remote.md).
 
 ```sh
-# Contoh sintetis lokal, tidak mengirim pesan
+# Local synthetic preview; sends nothing
 python3 main.py alerts --preview
-
-# Mengirim pesan berlabel TEST ke semua tujuan yang diaktifkan
+# Send a clearly labeled TEST to all enabled destinations
 python3 main.py alerts --test
-
-# Setelah koneksi berhasil, jalankan bot seperti biasa
+# Start normal operation
 python3 main.py run
 ```
 
-Preview juga disimpan ke `runtime/alerts-preview.txt`. Kunci alert tidak dibagikan
-ke AI atau OKX. `.env` tetap diabaikan Git.
+The preview is also saved to `runtime/alerts-preview.txt`. Alert credentials are not shared with the AI or OKX. `.env` remains Git-ignored.
 
-## Pengiriman dan batasannya
+## Delivery behavior
 
-Status pengiriman tersimpan di `runtime/alerts.sqlite3` dan ringkasannya dalam
-`runtime/research-output.json`. Ledger tidak menyimpan token atau URL webhook.
-Dedup persisten berlaku per tujuan, pair, arah, dan bucket waktu 15 menit dari
-paket riset. Bucket baru dapat menghasilkan alert baru untuk arah yang sama.
+Delivery status is stored in `runtime/alerts.sqlite3`, with a summary in `runtime/research-output.json`. The ledger excludes tokens and webhook URLs. Persistent deduplication uses destination, pair, direction, and the research packet's 15-minute bucket. A new bucket can generate another alert in the same direction.
 
-Request dibatasi 10 detik per tujuan, tidak mengikuti redirect, dan tidak mengirim
-mention Discord. Telegram memakai HTML dengan teks AI yang di-escape. Branding
-**Powered by [𝕏 web3rai](https://www.x.com/web3rai)** dipasang di bawah isi embed
-Discord dan baris terakhir Telegram sebagai tautan bertopeng. Error notifikasi
-tidak membatalkan alur trading; periksa bagian `alerts` dalam laporan riset.
+Requests time out after ten seconds per destination, reject redirects, and disable Discord mentions. Telegram HTML escapes AI text. AVAR4ISE appears as the project brand; **Powered by [𝕏 web3rai](https://www.x.com/web3rai)** remains a masked link at the bottom of the Discord embed and Telegram message. Notification failures do not cancel trading; inspect the research report's `alerts` field.
 
-Ledger ditandai sebelum request agar restart tidak mengirim ulang secara buta.
-Timeout/status `UNCONFIRMED` tidak dicoba ulang otomatis karena pesan mungkin
-sudah diterima. Kebijakan ini dapat kehilangan alert saat gangguan jaringan;
-bukan jaminan exactly-once delivery. Perintah `--test` baru adalah pengiriman baru.
-Pengiriman tes kedua channel telah dikonfirmasi pengguna. Format branding dan
-TP bertahap yang baru diuji offline; gunakan `alerts --preview` untuk contoh.
+The ledger records an attempt before sending. Timeout/UNCONFIRMED deliveries are not retried automatically because the message may already have arrived. This policy can lose alerts during outages and does not guarantee exactly-once delivery. Each new `--test` invocation is a new delivery.
 
-Referensi resmi: [Telegram sendMessage](https://core.telegram.org/bots/api#sendmessage),
-[Discord Execute Webhook](https://discord.com/developers/docs/resources/webhook#execute-webhook).
+Previous connectivity tests for both channels were confirmed by the user. Branding and split-TP formatting are tested offline; use the preview to inspect them.
+
+API references: [Telegram sendMessage](https://core.telegram.org/bots/api#sendmessage), [Discord Execute Webhook](https://discord.com/developers/docs/resources/webhook#execute-webhook).

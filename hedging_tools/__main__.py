@@ -11,17 +11,17 @@ COMMANDS = {
     'execution-test': 'demo_execution', 'paper-bridge': 'paper_bridge',
     'ai-check': 'ai_client', 'evaluate-ai': 'evaluate_ai',
     'reversion': 'reversion_research',
-    'alerts': 'alerts', 'universe': 'universe', 'signals': 'signal_history', 'improve': 'improve', 'shadow': 'shadow',
+    'alerts': 'alerts', 'universe': 'universe', 'signals': 'signal_history', 'improve': 'improve', 'shadow': 'shadow', 'telegram': 'telegram_remote',
 }
 
 
 def main():
-    parser = argparse.ArgumentParser(description='OKX Demo trading and research tools')
+    parser = argparse.ArgumentParser(description='AVAR4ISE · OKX Demo trading and research agent')
     parser.add_argument('command', choices=COMMANDS)
     parser.add_argument('arguments', nargs=argparse.REMAINDER)
     args = parser.parse_args()
     module = 'hedging_tools.' + COMMANDS[args.command]
-    sys.argv = [f'hedging-tools {args.command}', *args.arguments]
+    sys.argv = [f'avar4ise {args.command}', *args.arguments]
     if args.command == 'risk-demo':
         runpy.run_module(module, run_name='__main__')
         return 0

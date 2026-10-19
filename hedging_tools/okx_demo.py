@@ -64,7 +64,7 @@ class OKXDemo:
             "OK-ACCESS-KEY": self.keys[KEYS[0]], "OK-ACCESS-SIGN": signature,
             "OK-ACCESS-TIMESTAMP": stamp, "OK-ACCESS-PASSPHRASE": self.keys[KEYS[2]],
             "x-simulated-trading": "1", "Content-Type": "application/json",
-            "User-Agent": "HedgingTools-DemoPreflight/0.1", "Accept": "application/json"}, method=method)
+            "User-Agent": "AVAR4ISE-DemoPreflight/0.1", "Accept": "application/json"}, method=method)
         try:
             with self.opener(request, timeout=15) as response:
                 raw = response.read(2_000_001)

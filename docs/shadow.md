@@ -1,43 +1,43 @@
-# Pembanding struktur dan konteks market
+# Structure comparison and market context
 
-Diambil dari referensi diskusi: deteksi kondisi market sebagai konteks dan evaluasi hipotesis pada data baru. Tidak memasang QuantGPT, REA, AgenKit, atau provider model baru.
+This feature uses market-regime context and forward hypothesis evaluation. It does not install QuantGPT, REA, AgenKit, or a new model provider.
 
-## Menjalankan
+## Running
 
 ```sh
 python3 main.py run
 python3 main.py shadow
 ```
 
-Perintah pertama menjalankan supervisor seperti biasa, ditambah worker pembanding terpisah. Perintah kedua hanya menampilkan laporan lokal. `python3 main.py shadow --update` menjalankan satu pembaruan: membaca snapshot lokal baru dan mengambil mark candle publik untuk outcome yang sedang dilacak. Tidak membutuhkan kunci trading untuk pembanding.
+The first command starts the normal supervisor with a separate comparison worker. The second reads the local report. `python3 main.py shadow --update` performs one update, consuming fresh local snapshots and fetching public mark candles for tracked outcomes. The comparison requires no trading credentials.
 
-Restart proses `run` lama agar worker baru aktif. Strategi aktif tetap HH/HL atau LH/LL dengan BOS/retest. Paket analisis AI aktif sekarang mendapat konteks regime sehingga penilaian AI dapat berubah, tetapi gerbang struktur dan batas risiko tidak berubah.
+Restart an older `run` process to enable the worker. The active structure remains HH/HL or LH/LL with BOS/retest. AI packets include regime context, which can influence AI judgment, while structural gates and risk limits remain unchanged.
 
-## Apa yang dibandingkan
+## Models
 
-- **baseline**: definisi struktur aktif.
-- **break_bias**: arah dari close-break pivot 1H terkonfirmasi, dipertahankan sampai invalidasi; hipotesis yang diuji dalam audit sebelumnya.
+- **baseline:** the active structure definition.
+- **break_bias:** direction from a confirmed 1H pivot close-break, retained until invalidation; the hypothesis from the earlier audit.
 
-Keduanya memakai snapshot yang sama, dinilai ulang dengan waktu pengamatan worker, dan memakai syarat retest, spread serta ukuran risiko yang sama. Data yang menjadi kedaluwarsa ditolak. Snapshot lebih tua dari 180 detik tidak dibackfill. Quote memiliki batas umur scanner yang lebih ketat, sehingga keterlambatan worker dapat mengurangi sampel; alasan penolakan disimpan.
+Both use the same snapshots, re-evaluated at worker observation time, and the same retest, spread, and risk-sizing requirements. Stale data is rejected. Snapshots older than 180 seconds are not backfilled. Quotes have stricter scanner freshness limits, so worker delays can reduce samples; rejection reasons are recorded.
 
-Saat pertama diaktifkan, cursor mulai dari ID scan terbaru. Snapshot lama tidak dijadikan sampel forward. Maksimal 200 scan diproses per pembaruan. Outcome diperbarui maksimal lima pair per model per putaran dengan rotasi; worker dibatasi 120 detik dan berjalan terpisah dari pengelolaan posisi.
+On first activation, the cursor starts at the latest scan ID. Older snapshots are not treated as forward samples. The worker checks again five seconds after the preceding process completes, plus supervisor polling delay. Outcome polling is throttled to once per 60 seconds with a persistent cursor. Each update handles at most 200 scans and rotates outcome updates across at most five pairs per model. The worker has a 120-second timeout and runs separately from position management.
 
-Tidak ada panggilan AI, order, atau pengiriman Telegram/Discord dalam pembanding. Kandidat deterministik tidak diberi label sebagai rekomendasi AI. Catatannya berada di `runtime/shadow/<experiment>/`, terpisah dari transaksi, sinyal publik, dan mode improve. Satu BOS per pair/arah/model hanya didaftarkan sekali, termasuk saat proses diulang. Versi kode/konfigurasi baru memulai eksperimen terpisah.
+The comparison makes no AI calls, orders, or Telegram/Discord deliveries. Deterministic candidates are not labeled AI recommendations. Records live in `runtime/shadow/<experiment>/`, separate from trades, public signals, and improve mode. A BOS is registered once per pair/direction/model, including across restarts. New code/configuration versions start separate experiments.
 
-## Konteks market
+## Market context
 
-`metrics.regime` pada timeframe 15m dan 1H dihitung dari candle tertutup:
+`metrics.regime` for 15m and 1H uses closed candles:
 
-- Efisiensi 20 candle = perpindahan absolut / total perubahan absolut close. ≥0.4 diberi label DIRECTIONAL, ≤0.2 CHOPPY, sisanya MIXED.
-- Arah perubahan close 20 candle: UP, DOWN, FLAT.
-- Rata-rata true range 14 candle / rata-rata 28 candle sebelumnya: ≥1.5 EXPANDING, ≤0.75 CONTRACTING, sisanya NORMAL; baseline nol menghasilkan UNKNOWN.
+- 20-candle efficiency = absolute net displacement / total absolute close changes. Values ≥0.4 are DIRECTIONAL, ≤0.2 CHOPPY, otherwise MIXED.
+- 20-candle close direction: UP, DOWN, or FLAT.
+- Mean true range over 14 candles / mean over the preceding 28 candles: ≥1.5 EXPANDING, ≤0.75 CONTRACTING, otherwise NORMAL. A zero baseline yields UNKNOWN.
 
-Angka awal ini adalah hipotesis deskriptif, bukan probabilitas, kepastian arah, atau filter wajib. AI diminta mempertimbangkan konflik dengan setup, tanpa kewajiban menolak berdasarkan label saja. Snapshot mode improve menyimpan konteks tersebut untuk evaluasi berikutnya.
+These initial descriptive thresholds are hypotheses, not probabilities, certain forecasts, or mandatory filters. AI considers conflicts with the setup without having to reject solely on a label. Improve snapshots retain this context for later evaluation.
 
-## Membaca hasil
+## Reading results
 
-Laporan: `runtime/shadow-output.json`. Menampilkan jumlah observasi, alasan penolakan, jumlah kandidat, TP1/2/3, SL, protected stop, expiry, timeout, serta data tidak lengkap. Hasil ini adalah **sentuhan harga referensi**, bukan fill atau PnL transaksi.
+`runtime/shadow-output.json` reports observations, rejection reasons, candidate counts, TP1/2/3, SL, protected stops, expiry, timeout, and incomplete data. Outcomes represent **reference price touches**, not executed fills or trade PnL.
 
-Pelacakan baru dimulai pada menit utuh berikutnya setelah kandidat dicatat. Jika urutan entry/TP/SL dalam satu candle tidak diketahui, hasil ditandai AMBIGUOUS; gap data tidak dianggap sukses atau gagal. Mesin menggunakan mark price 1m, bukan rekonstruksi tick eksekusi.
+Tracking starts with the next full minute after registration. Unknown entry/TP/SL sequences within a candle are AMBIGUOUS; data gaps are not successes or failures. The engine uses one-minute mark candles, not execution tick reconstruction.
 
-**Biaya, slippage, funding dan PnL bersih belum disimulasikan.** Tidak menghitung win rate atau mengaktifkan model otomatis dari jumlah kandidat/TP. Belum menguji penilaian AI atau ketersediaan slot akun pada alternatif. Backtest eksekusi setelah biaya tetap tahap terpisah sebelum keputusan aktivasi.
+**Fees, slippage, funding, and net PnL are not simulated.** Candidate/TP counts do not produce a win rate or automatically activate a model. Alternative AI judgment and account slot availability are not evaluated. Execution backtesting after costs remains a separate step before adoption.

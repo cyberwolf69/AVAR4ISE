@@ -1,111 +1,66 @@
-# Scanner dinamis dan riwayat sinyal
+# Dynamic scanner and signal history
 
-`python3 main.py run` memakai dua fitur ini otomatis. Kapasitas trading tetap
-maksimal **5 posisi**, satu per pair, dengan margin/risk budget yang sama.
-Pair yang keluar dari daftar scanner tetap dikelola jika posisinya masih terbuka.
+`python3 main.py run` enables both features automatically. Trading capacity remains **five positions**, one per pair, under the existing margin and risk budget. Positions remain managed even when their pairs leave the scanner universe.
 
-## Pemilihan hingga 20 pair
+## Selecting up to 20 pairs
 
-Setiap scan mengambil daftar instrumen dan ticker publik OKX yang baru. Syarat:
+Each scan fetches fresh public OKX instruments and tickers. Requirements:
 
-- SWAP kripto kategori `1`, linear, settlement USDT, status live.
-- Metadata ukuran kontrak valid dan leverage instrumen mendukung minimal 10x.
-- Estimasi turnover 24 jam minimal **10 juta USDT**.
-- Spread bid/ask maksimal **0,1%** dan timestamp ticker tidak lebih tua 30 detik.
+- Category `1` crypto SWAP, linear, USDT settlement, live status.
+- Valid contract sizing metadata and instrument leverage supporting at least 10x.
+- Estimated 24-hour turnover of at least **10 million USDT**.
+- Bid/ask spread at most **0.1%**, with a ticker timestamp no older than 30 seconds.
 
-Estimasi turnover = `volCcy24h × last`. Pada kontrak derivatif OKX,
-`volCcy24h` adalah jumlah aset dasar, bukan jumlah kontrak atau nilai USDT.
-Ini estimasi memakai harga terakhir, bukan total notional historis yang eksak.
+Estimated turnover is `volCcy24h × last`. For OKX derivatives, `volCcy24h` is the base-asset quantity, not contract count or USDT value. This is a last-price estimate, not exact historical notional turnover.
 
-Ranking memakai 60% likuiditas relatif, 20% kualitas spread, dan 20% aktivitas
-rentang harga yang dibobot likuiditas. Aktivitas dibatasi pada rentang 10%, agar
-lonjakan ekstrem tidak terus memperbesar skor. Skor bukan probabilitas menang.
-Maksimal 20 pair dengan skor tertinggi masuk screening candle yang sudah ada.
-Jika discovery gagal/kosong, tidak memakai daftar lama untuk membuka entry baru.
+Ranking weights are 60% relative liquidity, 20% spread quality, and 20% liquidity-weighted price-range activity. Activity is capped at a 10% range so extreme spikes do not increase scores indefinitely. Scores are not win probabilities. The top 20 enter candle screening. Failed/empty discovery does not reuse a stale universe to open positions.
 
-Pengambilan snapshot memakai hingga empat worker. Maksimal tiga panggilan AI per
-scan portfolio dan hanya untuk kandidat dengan bukti headline. Prioritas diberikan
-kepada pair yang paling lama belum direview; ranking menjadi pemecah seri. Cursor
-persisten mencegah tiga pair teratas terus menghabiskan seluruh jatah AI. Kandidat lain ditandai `AI_CALL_BUDGET_REACHED`, bukan dipaksakan jadi
-sinyal. Snapshot lebih tua dari tiga menit sebelum review AI dilewati. Request pasar publik tidak
-mengirim key akun. Kegagalan satu pair tidak membatalkan kandidat valid
-pair lain; alur risiko dan revalidasi order tetap wajib.
+Snapshot fetching uses up to four workers. Portfolio research permits at most three AI reviews per scan, rotating toward pairs least recently reviewed with rank as the tie-breaker. A persistent cursor prevents the highest-ranked pairs from consuming every review. Other candidates receive `AI_CALL_BUDGET_REACHED`. Snapshots older than three minutes before review are skipped. Public requests contain no account keys. Failure for one pair does not cancel other valid candidates; execution risk checks and revalidation remain mandatory.
 
-Nama token dikenal dipakai untuk pencarian headline; ticker baru/ambigu memerlukan
-cashtag `$TOKEN` atau simbol `TOKENUSDT`/`TOKEN/USDT`. Berita BTC tidak otomatis
-dianggap bukti untuk semua altcoin. Jika tidak ada headline relevan, tidak ada
-proposal directional. Penambahan pair tidak menjamin lebih banyak trade.
+Known token names help headline searches; new/ambiguous tickers require a cashtag `$TOKEN` or symbol `TOKENUSDT`/`TOKEN/USDT`. BTC headlines are not automatically evidence for every altcoin. News is optional for the active technical structure model; missing headlines and failed feeds remain explicit context. More pairs do not guarantee more trades.
 
 ```sh
-# Read-only, tanpa key akun: lihat daftar pilihan sekarang
+# Read-only public discovery; no account credentials
 python3 main.py universe
-# Riset dan alert saja; tidak membuka order
+# Research and alerts only; no orders
 python3 main.py research --ai --portfolio
 ```
 
-Daftar/ranking terakhir: `runtime/universe-output.json`.
+Latest ranking: `runtime/universe-output.json`.
 
-## Apa yang dilacak
+## Tracking model
 
-Setiap proposal LONG/SHORT yang tervalidasi dicatat, termasuk ketika alert
-nonaktif, slot penuh, atau entry diblokir risiko. WAIT tidak dicatat sebagai
-sinyal. Identitas memakai pair + arah + bucket 15 menit, sama dengan deduplikasi
-alert; snapshot pertama dipertahankan, tidak ditulis ulang dengan harga terbaru.
-Pencatatan dimulai saat proposal diterima sebagai sinyal, bukan saat snapshot
-pasar dibuat. Ini bukan konfirmasi bahwa pesan channel telah terkirim.
+Every validated LONG/SHORT proposal is recorded, including when alerts are disabled, slots are full, or risk blocks execution. WAIT is not a signal. Identity uses pair + direction + 15-minute bucket, matching alert deduplication. The first snapshot is retained rather than overwritten with later prices. Tracking begins when the proposal is accepted, not when its market snapshot was created. Recording does not confirm channel delivery.
 
-Model evaluasi referensi:
+1. Use **closed one-minute mark-price candles**, starting with the first complete minute after signal registration. Skip candles spanning registration so earlier price movement cannot affect outcomes. Movement in the remaining fraction of the first minute is not modeled.
+2. Wait for the reference entry price to be touched before proposal expiry, usually 15 minutes after packet creation. This is a reference-touch assumption, not a simulation of the executor's FOK fill.
+3. Once touched, observe for at most 24 hours. TP1/TP2/TP3 and SL use reference levels. After TP1, the modeled stop includes a 0.2% cost buffer; after TP2 it protects at least 1R. This tracks price levels, not net PnL.
+4. Mark unprovable intrabar sequences `AMBIGUOUS`: entry and exit, TP and SL, or TP and a newly adjusted stop in the same candle. These are not definite wins or losses.
 
-1. Gunakan **candle mark-price 1 menit yang sudah selesai**, mulai dari menit penuh
-   pertama setelah sinyal dibuat. Candle yang melintasi waktu pembuatan dilewati
-   agar pergerakan sebelum sinyal tidak masuk penilaian. Pergerakan pada sisa menit
-   awal itu tidak tercakup dalam model ini.
-2. Tunggu harga referensi entry tersentuh sebelum masa berlaku proposal berakhir
-   (umumnya 15 menit sejak paket riset dibuat). Ini asumsi *reference touch*,
-   bukan simulasi fill FOK yang dipakai executor.
-3. Setelah entry referensi tersentuh, amati maksimum 24 jam. TP1/TP2/TP3 dan SL
-   mengikuti level referensi. Setelah TP1, stop model memakai buffer biaya 0,2%;
-   setelah TP2 minimal profit 1R. Ini model level harga, bukan estimasi PnL bersih.
-4. Urutan yang tidak bisa dibuktikan dari OHLC diberi `AMBIGUOUS`: entry dan exit
-   di candle sama, TP dan SL di candle sama, atau TP dan stop baru di candle sama.
-   Jangan menghitungnya sebagai kemenangan maupun kerugian yang pasti.
-
-| Status | Arti |
+| Status | Meaning |
 |---|---|
-| PENDING | Menunggu entry referensi tersentuh |
-| ACTIVE | Entry referensi tersentuh; TP1/TP2 dicatat sebagai milestone |
-| TP3 | Seluruh target referensi tercapai tanpa ambiguitas terdeteksi |
-| SL | Stop awal referensi tersentuh |
-| PROTECTED_STOP | Stop setelah TP1/TP2 tersentuh |
-| EXPIRED | Tidak ada entry dalam masa berlaku pada timeline yang teramati |
-| TIMEOUT | Observasi 24 jam berakhir tanpa hasil terminal lain |
-| AMBIGUOUS | Urutan intrabar tidak diketahui |
+| PENDING | Waiting for reference entry touch |
+| ACTIVE | Entry touched; TP1/TP2 recorded as milestones |
+| TP3 | All reference targets reached without detected ambiguity |
+| SL | Initial reference stop touched |
+| PROTECTED_STOP | Stop following TP1/TP2 touched |
+| EXPIRED | No entry before expiry on the observed timeline |
+| TIMEOUT | 24-hour observation ended without another terminal result |
+| AMBIGUOUS | Intrabar sequence unknown |
 
-Data yang hilang/gagal diambil ditandai `DATA_GAP`/`DATA_ERROR`, bukan dianggap
-expired atau menang. Cursor disimpan di SQLite; restart melanjutkan candle yang
-belum diproses. Setiap pembaruan membaca maksimum satu jendela 100 menit per pair,
-hingga 20 pair; backlog setelah mati lama diproses bertahap. Sinyal tidak berhenti
-dilacak hanya karena pair keluar dari daftar 20 terbaru.
+Missing/unavailable data is marked `DATA_GAP`/`DATA_ERROR`, not expired or successful. SQLite cursors resume unprocessed candles after restart. Each update reads at most one 100-minute window per pair, for up to 20 pairs; extended downtime backlogs are processed gradually. Tracking continues when pairs leave the latest universe.
 
-Worker terpisah diperbarui sekitar setiap 60 detik, dengan timeout 120 detik;
-latensi API dapat menambah jeda. Tetap berjalan saat slot penuh/daily halt.
-Ctrl+C menghentikan worker bersama supervisor; riwayat dilanjutkan pada restart.
-Tidak ada pesan TP/SL baru atau edit card otomatis dari tracker ini.
+A separate worker updates approximately every 60 seconds with a 120-second timeout; API latency can extend intervals. It continues during full slots or daily halt. Ctrl+C stops it with the supervisor, and restart resumes history. The tracker does not publish TP/SL updates or edit cards.
 
 ```sh
-# Ringkasan lokal, tanpa request jaringan
+# Local summary without network requests
 python3 main.py signals
-# Lihat setiap sinyal beserta urutan milestone
+# Per-signal milestones
 python3 main.py signals --details
-# Perbarui dari API publik secara manual, tanpa order atau alert
+# Manual public-data update without orders or alerts
 python3 main.py signals --update
 ```
 
-Ledger: `runtime/signal-history.sqlite3`. Laporan: `runtime/signal-history-output.json`.
-Ledger ini **terpisah dari `portfolio.sqlite3`**. Jumlah TP tersentuh bukan jumlah
-trade profit. Tracker tidak menghitung fill, fee, funding, win rate, maupun PnL
-aktual. Sinyal lama sebelum fitur aktif tidak direkonstruksi dengan waktu terbit
-buatan; riwayat dimulai dari proposal baru.
+Ledger: `runtime/signal-history.sqlite3`. Report: `runtime/signal-history-output.json`. This ledger is **separate from `portfolio.sqlite3`**. Target touches are not profitable trade counts. The tracker does not calculate actual fills, fees, funding, win rate, or PnL. Signals predating activation are not reconstructed with invented publication times.
 
-Parameter pasar mengikuti [dokumentasi OKX](https://www.okx.com/docs-v5/en/),
-khususnya instruments, tickers, dan historical mark-price candles.
+Market fields follow [OKX documentation](https://www.okx.com/docs-v5/en/), particularly instruments, tickers, and historical mark-price candles.

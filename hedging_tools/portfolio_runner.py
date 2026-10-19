@@ -15,6 +15,7 @@ from hedging_tools.okx_public import OKXPublic
 from hedging_tools.paths import PROJECT_ROOT, RUNTIME_DIR
 from hedging_tools.portfolio import Portfolio, Store
 from hedging_tools.history_worker import HistoryWorker
+from hedging_tools.controls import Controls
 
 
 def research_process(output):
@@ -130,17 +131,25 @@ def main():
         old = Budget(RUNTIME_DIR / 'demo-strategy.sqlite3').snapshot()
         if old.get('pending'):
             raise SystemExit('Reconcile legacy pending attempt first: python3 main.py agent --recover')
-        manager = Portfolio(Store(RUNTIME_DIR / 'portfolio.sqlite3', old), OKXDemo(), OKXPublic())
+        controls = Controls()
+        with controls.locked():
+            controls.initialize()
+        manager = Portfolio(Store(RUNTIME_DIR / 'portfolio.sqlite3', old), OKXDemo(), OKXPublic(), controls=controls)
         worker = HistoryWorker()
         reviewer = HistoryWorker(module='hedging_tools.improve', arguments=('--evaluate',))
-        shadow = HistoryWorker(module='hedging_tools.shadow', arguments=('--update',))
+        shadow = HistoryWorker(module='hedging_tools.shadow', arguments=('--update',), interval=5)
         def background():
+            heartbeat = {'time': datetime.now(timezone.utc).isoformat(), 'status': 'RUNNING'}
+            temporary = RUNTIME_DIR / 'engine-heartbeat.tmp'
+            temporary.write_text(json.dumps(heartbeat))
+            temporary.replace(RUNTIME_DIR / 'engine-heartbeat.json')
             worker.tick()
             reviewer.tick()
             shadow.tick()
         try:
             loop(manager, stop, args.interval, args.cycles, args.poll, publish=publish, background=background)
         finally:
+            (RUNTIME_DIR / "engine-heartbeat.json").write_text(json.dumps({"time": datetime.now(timezone.utc).isoformat(), "status": "STOPPED"}))
             worker.close()
             reviewer.close()
             shadow.close()

@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hedging-tools"
+name = "avar4ise"
 version = "0.1.0"
 description = "OKX Demo perpetual trading agent with AI research and persistent risk controls"
 readme = "README.md"
@@ -12,6 +12,7 @@ dependencies = []
 classifiers = ["Development Status :: 3 - Alpha", "Programming Language :: Python :: 3", "Operating System :: POSIX"]
 
 [project.scripts]
+avar4ise = "hedging_tools.__main__:main"
 hedging-tools = "hedging_tools.__main__:main"
 
 [tool.setuptools.packages.find]

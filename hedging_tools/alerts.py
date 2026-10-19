@@ -80,18 +80,18 @@ def signal_message(envelope, proposal, now=None):
     expiry = datetime.fromisoformat(signal['expires_at']).astimezone(ZoneInfo('Asia/Jakarta'))
     sources = [a['source'] for a in packet['news'] if a['id'] in proposal['source_ids']]
     text = (f"{signal['action']} SIGNAL · {signal['pair']}\n"
-            f"OKX DEMO\n\n"
-            f"Entry referensi: {entry}\nStop referensi: {stop}\n"
+            f"AVAR4ISE · OKX DEMO\n\n"
+            f"Reference entry: {entry}\nReference stop: {stop}\n"
             f"TP1 · 1R: {tp1} · 40%\n"
             f"TP2 · 2R: {tp2} · 35%\n"
             f"TP3 · 3R: {tp3} · 25%\n"
-            "TP1 → SL BEP + estimasi biaya · TP2 → SL profit 1R\n"
-            "Batas strategi: margin maks. 5 USDT · risiko maks. 1 USDT\n"
-            "Leverage strategi: 10–30x\n\n"
-            f"Alasan AI: {clean(proposal['reason'])}\n"
-            f"Invalidasi: {clean(proposal['invalidation'], 350)}\n"
-            f"Sumber headline: {clean(', '.join(dict.fromkeys(sources)) or 'Tidak tersedia; setup teknikal', 150)}\n"
-            f"Berlaku hingga: {expiry:%d-%m-%Y %H:%M:%S} WIB")
+            "TP1 → SL breakeven + estimated costs · TP2 → SL at 1R profit\n"
+            "Strategy limits: margin max. 5 USDT · risk max. 1 USDT\n"
+            "Strategy leverage: 10–30x\n\n"
+            f"AI rationale: {clean(proposal['reason'])}\n"
+            f"Invalidation: {clean(proposal['invalidation'], 350)}\n"
+            f"Headline sources: {clean(', '.join(dict.fromkeys(sources)) or 'Unavailable; technical setup', 150)}\n"
+            f"Valid until: {expiry:%d-%m-%Y %H:%M:%S} WIB")
     bucket = int(datetime.fromisoformat(packet['created_at']).timestamp()) // 900
     event_id = f"signal:{packet['pair']}:{signal['action']}:{bucket}"
     return {'id': event_id, 'text': text, 'direction': signal['action'], 'expires_at': signal['expires_at']}
@@ -99,8 +99,8 @@ def signal_message(envelope, proposal, now=None):
 
 def payload(target, message):
     if target['channel'] == 'discord':
-        return {'username': 'Hedging Tools', 'allowed_mentions': {'parse': []},
-                'embeds': [{'title': 'Hedging Tools · OKX Demo', 'description': message['text'] + f'\n\nPowered by [{BRAND_TEXT}]({BRAND_URL})',
+        return {'username': 'AVAR4ISE', 'allowed_mentions': {'parse': []},
+                'embeds': [{'title': 'AVAR4ISE · OKX Demo', 'description': message['text'] + f'\n\nPowered by [{BRAND_TEXT}]({BRAND_URL})',
                             'color': 3066993 if message.get('direction') == 'LONG' else 15158332}]}
     return {'chat_id': target['chat_id'], 'parse_mode': 'HTML',
             'text': html.escape(message['text']) + f'\n\nPowered by <a href="{BRAND_URL}">{BRAND_TEXT}</a>',
@@ -110,7 +110,7 @@ def payload(target, message):
 def send(target, message, opener=None):
     opener = opener or build_opener(NoRedirect(), HTTPSHandler(context=OKXPublic().context)).open
     request = Request(target['url'], data=json.dumps(payload(target, message)).encode(),
-                      headers={'Content-Type': 'application/json', 'User-Agent': 'HedgingTools/0.1'}, method='POST')
+                      headers={'Content-Type': 'application/json', 'User-Agent': 'AVAR4ISE/0.1'}, method='POST')
     try:
         with opener(request, timeout=10) as response:
             raw = response.read(100001)
@@ -183,17 +183,17 @@ def main():
     mode.add_argument('--preview', action='store_true', help='Local sample only; no messages sent')
     mode.add_argument('--test', action='store_true', help='Send a clearly labeled test to enabled destinations')
     args = parser.parse_args()
-    message = {'id': 'test:' + uuid.uuid4().hex, 'text': 'TEST ALERT · Hedging Tools\nKoneksi notifikasi OKX Demo. Ini bukan sinyal trading dan tidak membuat order.'}
+    message = {'id': 'test:' + uuid.uuid4().hex, 'text': 'TEST ALERT · AVAR4ISE\nOKX Demo notification test. This is not a trading signal and does not place an order.'}
     if args.preview:
         now = datetime.now(timezone.utc)
         packet = make_packet({'pair': 'BTC-USDT-SWAP', 'status': 'WATCHLIST',
                               'candidate': {'action': 'LONG', 'entry': '100000', 'stop_reference': '99500'}},
-                             [{'id': 'example', 'source': 'Sumber contoh'}], [{'status': 'OK'}], now)
+                             [{'id': 'example', 'source': 'Example source'}], [{'status': 'OK'}], now)
         proposal = {'packet_id': packet['input']['packet_id'], 'pair': 'BTC-USDT-SWAP',
-                    'action': 'LONG', 'reason': 'Contoh alasan AI; bukan analisis market saat ini.',
-                    'invalidation': 'Contoh: harga menembus area stop.', 'source_ids': ['example'],
+                    'action': 'LONG', 'reason': 'Example AI rationale; not current market analysis.',
+                    'invalidation': 'Example: price breaks through the stop area.', 'source_ids': ['example'],
                     'expires_at': packet['input']['expires_at']}
-        text = 'CONTOH SINTETIS — TIDAK DIKIRIM\n\n' + signal_message(packet, proposal, now)['text'] + f'\n\nPowered by [{BRAND_TEXT}]({BRAND_URL})'
+        text = 'SYNTHETIC EXAMPLE — NOT SENT\n\n' + signal_message(packet, proposal, now)['text'] + f'\n\nPowered by [{BRAND_TEXT}]({BRAND_URL})'
         (RUNTIME_DIR / 'alerts-preview.txt').write_text(text + '\n')
         print(text)
         return 0

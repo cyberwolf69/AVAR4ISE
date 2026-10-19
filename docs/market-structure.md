@@ -1,31 +1,31 @@
-# Setup market structure v1
+# Market structure setup v1
 
-Scanner default sekarang `structure_bos_retest_v1`. Ini implementasi mandiri BOS/retest, bukan port kode LuxAlgo atau replika hasil indikator TradingView. Order block dan FVG belum menjadi detektor aktif. Referensi konsep: [SMC LuxAlgo](https://www.tradingview.com/script/CnB3fSph-Smart-Money-Concepts-SMC-LuxAlgo/), [Order Block Detector](https://www.tradingview.com/script/KvGhxGxY-Order-Block-Detector-LuxAlgo/). Backtester LuxAlgo merupakan referensi evaluasi; belum terintegrasi.
+The default scanner is `structure_bos_retest_v1`, an independent BOS/retest implementation, not a port of LuxAlgo code or a replica of TradingView results. Order blocks and FVGs are not active detectors. Concept references: [LuxAlgo SMC](https://www.tradingview.com/script/CnB3fSph-Smart-Money-Concepts-SMC-LuxAlgo/) and [Order Block Detector](https://www.tradingview.com/script/KvGhxGxY-Order-Block-Detector-LuxAlgo/). The LuxAlgo backtester is an evaluation reference, not an integration.
 
-## Aturan yang dapat diuji
+## Testable rules
 
-- Semua candle sudah tutup; swing memakai dua candle kiri dan dua kanan, high/low harus lebih ekstrem secara ketat. Pivot baru tersedia setelah candle kanan kedua tutup.
-- Struktur 1H: dua swing high dan dua swing low terbaru sama-sama naik (long), atau turun (short). Harga tidak boleh sudah menembus swing invalidasi terakhir.
-- BOS 15m: close melintasi swing searah tren yang sudah dikonfirmasi sebelum candle breakout. Satu pivot hanya menghasilkan satu BOS.
-- Retest terjadi 1–8 candle setelah BOS. Candle terakhir harus menyentuh area level ±0.25 ATR, menutup kembali di sisi arah setup, dan close bergerak searah dibanding candle sebelumnya.
-- Close melewati sisi salah level lebih dari 0.25 ATR sejak breakout membatalkan retest itu.
-- Quote entry harus tetap di sisi benar level dan tidak lebih jauh dari 0.75 ATR.
-- SL berada di luar low/high rangkaian candle setelah breakout, ditambah buffer 0.2 ATR. Ukuran posisi tetap harus lolos batas margin dan risiko yang ada. Tidak mengencangkan SL agar setup dipaksa lolos.
+- All candles are closed. Swings require two candles on either side and strictly more extreme highs/lows. A pivot becomes available only after its second right-hand candle closes.
+- 1H structure: the latest two swing highs and lows must both rise for a long or both fall for a short. Price must not have broken the latest invalidation swing.
+- 15m BOS: a close crosses a swing in the trend direction, using a pivot confirmed before the breakout candle. Each pivot generates at most one BOS.
+- Retest occurs 1–8 candles after BOS. The latest candle must touch the level ±0.25 ATR, close on the setup side, and move in the setup direction relative to the previous close.
+- A close more than 0.25 ATR beyond the wrong side of the level after breakout invalidates that retest.
+- The entry quote must remain on the correct side and within 0.75 ATR of the level.
+- SL lies beyond the post-breakout sequence's low/high, with a 0.2 ATR buffer. Position sizing must pass existing margin/risk checks. Stops are not tightened to force eligibility.
 
-Angka tersebut merupakan parameter awal yang belum terbukti menghasilkan keuntungan. EMA dan RVOL disampaikan sebagai konteks AI, tidak menjadi gerbang wajib pada model struktur. Syarat spread, kesegaran data, lot, leverage, serta risiko tetap berlaku. Portfolio tetap maksimal 5 posisi; konfigurasi legacy paper memiliki batasnya sendiri.
+These initial parameters are not proven profitable. EMA and RVOL provide AI context rather than mandatory gates for the structure model. Spread, freshness, lot, leverage, and risk requirements still apply. The portfolio permits at most five positions; legacy paper configuration has separate limits.
 
-## AI, berita, dan log
+## AI, news, and logs
 
-Kandidat teknikal boleh ditinjau tanpa berita. Packet tetap berisi `news` dan `feed_health`, sehingga AI dapat membedakan feed gagal dari tidak adanya headline relevan. AI tidak boleh menyebut ketiadaan berita sebagai bukti aman, mengarang sumber, membalik arah kandidat, atau mengubah risiko. Batas tiga review AI per siklus dan rotasi pair tetap berlaku.
+Technical candidates may be reviewed without news. Packets retain `news` and `feed_health` so the AI can distinguish failed feeds from no relevant headlines. It must not interpret missing news as evidence of safety, invent sources, reverse the candidate direction, or change risk. The three-review AI budget per cycle and pair rotation remain active. AI rationale and invalidation text are requested in English.
 
-`SCAN_COMPLETE.decisions[].screen_reasons` menjelaskan alasan scanner menolak setup. Bukti struktur tersedia dalam `metrics.structure` di runtime/research-output.json, termasuk waktu asal pivot, candle konfirmasi pivot, BOS, dan konfirmasi retest. Timestamp itu adalah waktu pembukaan candle; bukti hanya tersedia setelah candle tersebut selesai.
+`SCAN_COMPLETE.decisions[].screen_reasons` explains rejected setups. Structure evidence appears in `metrics.structure` within `runtime/research-output.json`, including pivot origin, confirmation candle, BOS, and retest confirmation. These timestamps identify candle opening times; evidence becomes available only after the corresponding candle closes.
 
-Mode improve merekam bukti dan versi strategi baru secara terpisah. Evaluasinya tetap replay filter entry, belum merupakan backtest penuh strategi struktur. Uji demo diperlukan untuk menilai hasil aktual.
+Improve mode stores evidence and strategy versions separately. It evaluates entry filters rather than a complete structure-strategy backtest. Demo testing is still required to assess actual outcomes.
 
-Jalankan setelah menghentikan proses versi lama:
+Stop the older process before running:
 
 ```sh
 python3 main.py run
 ```
 
-Restart tidak menutup posisi. Pengelolaan posisi yang sudah ada memakai rencana tersimpan; perubahan scanner berlaku untuk kandidat baru.
+Restarting does not close positions. Existing positions retain their saved plans; scanner changes apply to new candidates.

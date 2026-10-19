@@ -62,7 +62,7 @@ class AIClient:
             "input": content, "max_output_tokens": max_tokens, "store": False, "stream": False})
         request = Request(base + ("/chat/completions" if chat else "/responses"), data=json.dumps(body).encode(),
                           headers={"Authorization": "Bearer " + self.config["AI_API_KEY"],
-                                   "Content-Type": "application/json", "User-Agent": "HedgingTools/0.1"}, method="POST")
+                                   "Content-Type": "application/json", "User-Agent": "AVAR4ISE/0.1"}, method="POST")
         # No automatic retries for billable calls or protocol/model substitutions.
         try:
             with self.opener(request, timeout=45) as response:
