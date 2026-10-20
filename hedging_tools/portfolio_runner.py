@@ -17,6 +17,7 @@ from hedging_tools.portfolio import Portfolio, Store
 from hedging_tools.history_worker import HistoryWorker
 from hedging_tools.controls import Controls
 from hedging_tools.remote_worker import RemoteWorker
+from hedging_tools.engine_events import EngineEvents
 
 
 def research_process(output):
@@ -73,7 +74,10 @@ def loop(manager, stop, interval=60, cycles=0, poll=5, launch=research_process,
                             except Exception as exc:
                                 result = {'status': 'ENTRY_BLOCKED', 'reason': str(exc) if isinstance(exc, (DemoError, ValueError)) else type(exc).__name__}
                             results.append({'pair': packet['input']['pair'], **result})
-                        publish({'status': 'SCAN_COMPLETE', 'cycle': completed, 'decisions': results, 'alerts': data.get('alerts')})
+                        publish({'status': 'SCAN_COMPLETE', 'cycle': completed, 'decisions': results, 'alerts': data.get('alerts'),
+                                 'ai': {'errors': [{'pair': p['input']['pair'], 'reason': a.get('reason','Unknown AI error')}
+                                                  for p,a in zip(data['packets'],data['analyses']) if a.get('status')=='ERROR'],
+                                        'validated': sum(a.get('status')=='VALIDATED' for a in data['analyses'])}})
                     else:
                         publish({'status': 'RESEARCH_FAILED', 'cycle': completed, 'details': 'See research-output.json; position supervision continues'})
                     if output.exists():
@@ -117,6 +121,12 @@ def main():
     stop = threading.Event()
     signal.signal(signal.SIGINT, lambda *_: stop.set())
     signal.signal(signal.SIGTERM, lambda *_: stop.set())
+    events = EngineEvents()
+    def notify(report):
+        try:
+            events.report(report)
+        except Exception:
+            print(json.dumps({'status':'OWNER_EVENT_LOG_ERROR'}), flush=True)
     def publish(report):
         value = {'mode': 'OKX_DEMO', 'time': datetime.now(timezone.utc).isoformat(), **report}
         path = RUNTIME_DIR / 'portfolio-output.json'
@@ -124,6 +134,7 @@ def main():
         temporary.write_text(json.dumps(value, indent=2) + '\n')
         temporary.replace(path)
         print(json.dumps(value, ensure_ascii=False), flush=True)
+        notify(value)
     with (RUNTIME_DIR / '.demo-agent.lock').open('a') as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -139,7 +150,8 @@ def main():
         worker = HistoryWorker()
         reviewer = HistoryWorker(module='hedging_tools.improve', arguments=('--evaluate',))
         shadow = HistoryWorker(module='hedging_tools.shadow', arguments=('--update',), interval=5)
-        remote = RemoteWorker()
+        remote = RemoteWorker(publish=lambda report: (print(json.dumps(report),flush=True), notify(report)))
+        notify({'status':'ENGINE_STARTED','mode':'OKX_DEMO'})
         def background():
             heartbeat = {'time': datetime.now(timezone.utc).isoformat(), 'status': 'RUNNING'}
             temporary = RUNTIME_DIR / 'engine-heartbeat.tmp'
@@ -149,9 +161,14 @@ def main():
             reviewer.tick()
             shadow.tick()
             remote.tick()
+            try:
+                events.positions(manager.store.read())
+            except Exception:
+                print(json.dumps({'status':'OWNER_POSITION_EVENT_ERROR'}),flush=True)
         try:
             loop(manager, stop, args.interval, args.cycles, args.poll, publish=publish, background=background)
         finally:
+            notify({'status':'ENGINE_STOPPED','positions':'Confirmed native exits remain; stop adjustments require run.'})
             remote.close()
             (RUNTIME_DIR / "engine-heartbeat.json").write_text(json.dumps({"time": datetime.now(timezone.utc).isoformat(), "status": "STOPPED"}))
             worker.close()

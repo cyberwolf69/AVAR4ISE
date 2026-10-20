@@ -13,6 +13,7 @@ from hedging_tools.controls import Controls
 from hedging_tools.okx_public import OKXPublic
 from hedging_tools.paths import PROJECT_ROOT, RUNTIME_DIR
 from hedging_tools.risk_engine import number as D
+from hedging_tools.engine_events import EngineEvents
 
 HELP = '''AVAR4ISE · OKX DEMO
 /status — heartbeat, scan, settings
@@ -230,7 +231,9 @@ def main():
             fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         except BlockingIOError:
             print(json.dumps({'status':'BLOCKED','reason':'Remote already running'}));return 1
-        controls=Controls();controls.initialize();api=API(token);menu=CommandMenu()
+        controls=Controls();controls.initialize();api=API(token);menu=CommandMenu();events=EngineEvents()
+        events.emit('REMOTE_HEALTH','Remote started; owner commands and engine notifications enabled.')
+        failed=False
         print(json.dumps({'status':'REMOTE_RUNNING','mode':'OKX_DEMO'}),flush=True)
         try:
             while True:
@@ -238,8 +241,15 @@ def main():
                 if menu_status:
                     print(json.dumps(menu_status),flush=True)
                 try:
+                    events.drain(api,owner)
+                except Exception:
+                    print(json.dumps({'status':'OWNER_DELIVERY_UNCONFIRMED','reason':'Check engine-events.sqlite3; delivery is not retried blindly'}),flush=True)
+                try:
                     offset=controls.offset()
                     updates=api.call('getUpdates',{'offset':offset,'timeout':20,'allowed_updates':['message']})
+                    if failed:
+                        events.emit('REMOTE_HEALTH','Telegram polling recovered. Check event ledger for unconfirmed deliveries.')
+                        failed=False
                     for update in updates:
                         if update['update_id']<offset:
                             continue
@@ -250,6 +260,11 @@ def main():
                         if reply:
                             api.call('sendMessage',{'chat_id':owner,'text':reply[:4000],'reply_markup':KEYBOARD})
                 except Exception:
+                    failed=True
+                    try:
+                        events.emit('REMOTE_HEALTH','Telegram request or local state failed; remote is retrying. Details remain unavailable; check configuration/network.')
+                    except Exception:
+                        pass
                     print(json.dumps({'status':'REMOTE_RETRY','reason':'Request or local state unavailable; inspect configuration/network'}),flush=True)
                     time.sleep(5)
         except KeyboardInterrupt:

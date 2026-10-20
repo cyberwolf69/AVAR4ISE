@@ -43,13 +43,13 @@ class AlertTests(unittest.TestCase):
         message = signal_message(self.packet, self.proposal, self.now)
         self.assertNotIn('BELUM ORDER', message['text'])
         self.assertNotIn('signal only', message['text'].lower())
-        self.assertIn('TP1 · 1R: 101', message['text'])
-        self.assertIn('TP3 · 3R: 103', message['text'])
-        self.assertIn('2R: 102', message['text'])
+        self.assertIn('TP1: 101', message['text'])
+        self.assertIn('TP3: 103', message['text'])
+        self.assertIn('TP2: 102', message['text'])
         self.assertNotIn('@everyone', message['text'])
         self.assertEqual(payload(self.discord, message)['allowed_mentions'], {'parse': []})
         self.assertEqual(payload(self.telegram, message)['parse_mode'], 'HTML')
-        self.assertIn('Powered by [𝕏 web3rai](https://www.x.com/web3rai)', payload(self.discord, message)['embeds'][0]['description'])
+        self.assertIn('Powered by [𝕏 web3rai](https://www.x.com/web3rai)', payload(self.discord, message)['embeds'][0]['fields'][-1]['value'])
         self.assertIn('<a href="https://www.x.com/web3rai">𝕏 web3rai</a>', payload(self.telegram, message)['text'])
 
     def test_untrusted_html_is_escaped_before_branded_link(self):
@@ -110,3 +110,25 @@ class AlertTests(unittest.TestCase):
             delivery.reset_mock()
             notify_signals([self.packet], [{'status': 'SKIPPED'}])
             delivery.assert_not_called()
+
+    def test_short_card_prices_and_moves(self):
+        self.packet['input']['market']['candidate'].update(action='SHORT', stop_reference='101')
+        self.proposal['action']='SHORT'
+        message=signal_message(self.packet,self.proposal,self.now)
+        fields=payload(self.discord,message)['embeds'][0]['fields']
+        self.assertIn('SHORT',message['card']['title'])
+        self.assertIn('`99`',fields[2]['value'])
+        self.assertIn('-1.00%',fields[2]['value'])
+        self.assertEqual([f['inline'] for f in fields[:5]],[True]*5)
+
+    def test_card_escapes_untrusted_text_and_stays_in_limits(self):
+        self.proposal['reason']='Bad <b>tag</b> @everyone [link](https://evil.example) '+('word '*350)
+        message=signal_message(self.packet,self.proposal,self.now)
+        d=payload(self.discord,message)['embeds'][0]
+        t=payload(self.telegram,message)['text']
+        self.assertLess(len(t),4096)
+        self.assertTrue(all(len(f['value'])<=1024 for f in d['fields']))
+        self.assertNotIn('@everyone',str(d))
+        self.assertNotIn('<b>tag</b>',t)
+        self.assertEqual(t.count('<a href='),1)
+        self.assertTrue(message['card']['fields'][5]['value'].endswith('…'))

@@ -2,7 +2,7 @@
 
 Alerts are sent automatically by `research --ai`, including research launched by `agent`/`run`, when a LONG/SHORT proposal passes AI validation. WAIT, data errors, and expired proposals are not published. Publishing is independent of execution permission: cards do not display slot availability or execution labels. Account checks may still reject an entry; an alert does not confirm a fill.
 
-Cards contain the pair, direction, reference entry/SL, TP1/TP2/TP3 at 1R/2R/3R, risk limits, AI rationale, invalidation, headline source names, and expiration in WIB (UTC+7). No invented confidence or win probability is shown. Signal targets use the snapshot; actual position targets use the entry limit price, and subsequent stop adjustments use the actual fill.
+Cards contain the pair, direction, reference entry/SL, TP1/TP2/TP3 prices, risk limits, AI rationale, invalidation, and headline source names. No invented confidence or win probability is shown. Signal targets use the snapshot; actual position targets use the entry limit price, and subsequent stop adjustments use the actual fill.
 
 Inspect reference outcomes with `python3 main.py signals`. See [signal tracking](discovery-and-signals.md). The tracker does not edit published cards or equate reference outcomes with trade PnL.
 
@@ -46,3 +46,15 @@ The ledger records an attempt before sending. Timeout/UNCONFIRMED deliveries are
 Previous connectivity tests for both channels were confirmed by the user. Branding and split-TP formatting are tested offline; use the preview to inspect them.
 
 API references: [Telegram sendMessage](https://core.telegram.org/bots/api#sendmessage), [Discord Execute Webhook](https://discord.com/developers/docs/resources/webhook#execute-webhook).
+
+## Signal card layout
+
+Discord uses inline fields: Entry / Stop Loss, then TP1 / TP2 / TP3. Telegram uses bold section labels and monospace prices in a vertical layout. Both show an English rationale, invalidation and news context, with a clickable web3rai credit at the bottom. LONG is green and SHORT is red on Discord.
+
+Percentages are signed price changes from the reference entry, not leveraged PnL. No invented confidence, execution status, or TP-hit markers are included in an initial signal card.
+
+AI instructions request concise explanations that retain material conflicts. Older verbose text is shortened at word boundaries with an ellipsis, and raw millisecond timestamps are converted to WIB. Full rationale remains in the research records. Preview files include `runtime/alerts-preview-discord.json` and `runtime/alerts-preview-telegram.html`; `alerts --preview` sends no messages. Previously published cards are not edited automatically.
+
+TP risk-multiple labels, allocation percentages, and expiry timestamps are hidden from published cards. Execution still uses the original target allocations and proposal expiry; expiry validation and the delivery cutoff remain enforced.
+
+R:R, the Position Plan section, and the words “price move” are hidden. Signed price-change percentages remain. Live TP/SL hit markers are deferred; initial cards do not claim target execution.

@@ -61,3 +61,13 @@ Each change shows before → after and requires owner confirmation. Confirmation
 - Margin, leverage, and slot changes start separate shadow/improve experiment versions.
 
 Implementation uses the [Telegram Bot API](https://core.telegram.org/bots/api#getupdates) for polling, replies, and automatic menu registration.
+
+## Automatic engine notifications
+
+When the remote is enabled, `run` records operational events in `runtime/engine-events.sqlite3` and the remote delivers them to `TELEGRAM_OWNER_ID` only. These reports are separate from public signal channels and do not require `ALERTS_ENABLED=true`.
+
+Events include engine startup/shutdown, remote startup/restart and polling recovery, completed-scan summaries with rejection counts, AI errors by pair, validated AI recovery, account management errors/recovery, daily halt/position-count changes, and saved position changes (stage, remaining size, stops, exit and realized PnL). Positions are snapshots of reconciled state, not independently verified fills. An initial snapshot of existing positions may be published on first activation.
+
+Each completed scan gets one summary rather than a message for every WAIT pair. Identical health/errors are suppressed for 15 minutes; a changed state is recorded immediately. No AI calls in a scan do not count as AI recovery. Position snapshots are sent only when their tracked fields change. Logs and messages use English. HTTP 402 suggests a payment/access issue but does not establish exhausted credits; HTTP 429 indicates too many requests. Exact router causes require provider evidence.
+
+Delivery runs separately from trading, with up to three queued messages per remote polling iteration. Credentials and URLs are redacted before persistence. Records contain timestamps so delayed notices are recognizable. If Telegram is unavailable it cannot immediately report its own outage. Pending events survive restart. Delivery attempts are claimed before sending; ambiguous failures become UNCONFIRMED and are not automatically resent to avoid duplicates. A stop notice may remain pending until the next remote start because `run` also stops the remote. Hard kills/power loss cannot guarantee a final notice. Inspect the local ledger for delivery status; these alerts are best-effort, not an independent uptime monitor.

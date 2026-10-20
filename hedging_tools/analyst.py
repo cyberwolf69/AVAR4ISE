@@ -18,7 +18,7 @@ Evaluate supplied structure, invalidation, volume and contradictory evidence.
 Regime metrics describe past closed candles, not a forecast or probability.
 Use them as context, not a mandatory rejection rule. Explain any material
 conflict between setup direction, price efficiency and volatility. Direction must match the screened
-candidate. Copy input.expires_at exactly. Explain briefly in English.
+candidate. Copy input.expires_at exactly. Explain briefly in English. Keep reason to at most three short sentences (450 characters), covering the setup and material conflicting evidence. Keep invalidation under 220 characters. Use plain trading language; omit internal model IDs and raw Unix timestamps.
 Use only the provided schema fields, without Markdown fences."""
 SYSTEM_INSTRUCTIONS += """
 Execution DISABLED only describes this research environment, not market quality.

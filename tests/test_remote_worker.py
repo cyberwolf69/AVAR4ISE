@@ -79,6 +79,7 @@ class RemoteWorkerTests(unittest.TestCase):
                 patch.object(portfolio_runner, 'OKXPublic'), \
                 patch.object(portfolio_runner, 'HistoryWorker'), \
                 patch.object(portfolio_runner, 'RemoteWorker') as remote, \
+                patch.object(portfolio_runner, 'EngineEvents'), \
                 patch.object(portfolio_runner, 'loop') as loop, \
                 patch('sys.argv', ['run']):
             budget.return_value.snapshot.return_value = {}

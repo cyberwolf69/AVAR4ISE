@@ -65,6 +65,31 @@ def clean(value, limit=600):
     return value[:limit]
 
 
+def brief(value, limit=650):
+    """Keep prose readable without inventing a summary or cutting a word in half."""
+    value = clean(value, 4000)
+    value = value.replace('structure_bos_retest_v1', 'BOS + retest')
+    def timestamp(match):
+        try:
+            return datetime.fromtimestamp(int(match[0])/1000, ZoneInfo('Asia/Jakarta')).strftime('%d %b %H:%M WIB')
+        except (ValueError, OSError, OverflowError):
+            return '[timestamp]'
+    value = re.sub(r'\b1[0-9]{12}\b', timestamp, value)
+    value = ' '.join(value.split())
+    if len(value) <= limit:
+        return value
+    return value[:limit-1].rsplit(' ', 1)[0].rstrip(',;:') + '…'
+
+
+def price(value):
+    text = format(number(value), 'f')
+    return text.rstrip('0').rstrip('.') if '.' in text else text
+
+
+def markdown(value):
+    return re.sub(r'([\\*_~|<>\[\]])', r'\\\1', str(value))
+
+
 def signal_message(envelope, proposal, now=None):
     validated = validate_proposal(proposal, envelope, now)
     signal = validated['signal']
@@ -82,29 +107,72 @@ def signal_message(envelope, proposal, now=None):
     text = (f"{signal['action']} SIGNAL · {signal['pair']}\n"
             f"AVAR4ISE · OKX DEMO\n\n"
             f"Reference entry: {entry}\nReference stop: {stop}\n"
-            f"TP1 · 1R: {tp1} · 40%\n"
-            f"TP2 · 2R: {tp2} · 35%\n"
-            f"TP3 · 3R: {tp3} · 25%\n"
-            "TP1 → SL breakeven + estimated costs · TP2 → SL at 1R profit\n"
+            f"TP1: {tp1}\n"
+            f"TP2: {tp2}\n"
+            f"TP3: {tp3}\n"
+            "TP1 → SL breakeven + estimated costs · TP2 → lock in profit\n"
             "Strategy limits: margin max. 5 USDT · risk max. 1 USDT\n"
             "Strategy leverage: 10–30x\n\n"
             f"AI rationale: {clean(proposal['reason'])}\n"
             f"Invalidation: {clean(proposal['invalidation'], 350)}\n"
             f"Headline sources: {clean(', '.join(dict.fromkeys(sources)) or 'Unavailable; technical setup', 150)}\n"
-            f"Valid until: {expiry:%d-%m-%Y %H:%M:%S} WIB")
+            )
     bucket = int(datetime.fromisoformat(packet['created_at']).timestamp()) // 900
     event_id = f"signal:{packet['pair']}:{signal['action']}:{bucket}"
-    return {'id': event_id, 'text': text, 'direction': signal['action'], 'expires_at': signal['expires_at']}
+    card = {
+        'title': f"{'🟢' if sign == 1 else '🔴'} {signal['action']} SIGNAL · {signal['pair'].removesuffix('-SWAP')}",
+        'subtitle': 'AVAR4ISE · OKX Demo · Reference levels',
+        'fields': [
+            {'name': 'Entry', 'value': price(entry), 'inline': True, 'code': True},
+            {'name': 'Stop Loss', 'value': f'{price(stop)}\n{(stop-entry)/entry*100:+.2f}%', 'inline': True, 'code': True},
+        ]}
+    for i, tp in enumerate((tp1,tp2,tp3), 1):
+        move = (tp-entry)/entry*100
+        card['fields'].append({'name': f'TP{i}',
+                               'value': f'{price(tp)}\n{move:+.2f}%', 'inline': True, 'code': True})
+    if candidate.get('setup_model') == 'structure_bos_retest_v1':
+        card['subtitle'] += ' · 15m entry / 1H structure'
+    card['fields'].extend([
+        {'name': '🧠 AI Rationale', 'value': brief(proposal['reason']), 'inline': False},
+        {'name': 'Invalidation', 'value': brief(proposal['invalidation'], 300), 'inline': False},
+        {'name': 'News Context', 'value': brief(', '.join(dict.fromkeys(sources)) or 'Unavailable · technical setup', 150), 'inline': False},
+    ])
+    return {'id': event_id, 'text': text, 'card': card, 'direction': signal['action'], 'expires_at': signal['expires_at']}
 
 
 def payload(target, message):
+    card = message.get('card')
     if target['channel'] == 'discord':
-        return {'username': 'AVAR4ISE', 'allowed_mentions': {'parse': []},
-                'embeds': [{'title': 'AVAR4ISE · OKX Demo', 'description': message['text'] + f'\n\nPowered by [{BRAND_TEXT}]({BRAND_URL})',
-                            'color': 3066993 if message.get('direction') == 'LONG' else 15158332}]}
-    return {'chat_id': target['chat_id'], 'parse_mode': 'HTML',
-            'text': html.escape(message['text']) + f'\n\nPowered by <a href="{BRAND_URL}">{BRAND_TEXT}</a>',
-            'link_preview_options': {'is_disabled': True}}
+        embed = {'title': card['title'] if card else 'AVAR4ISE · OKX Demo',
+                 'description': card['subtitle'] if card else message['text'],
+                 'color': 3066993 if message.get('direction') == 'LONG' else 15158332}
+        if card:
+            fields = []
+            for field in card['fields']:
+                value = markdown(field['value'])
+                if field.get('code'):
+                    first, sep, rest = value.partition('\n')
+                    value = f'`{first}`' + ('\n'+rest if sep else '')
+                fields.append({'name':field['name'], 'value':value, 'inline':field['inline']})
+            fields.append({'name':'\u200b', 'value':f'Powered by [{BRAND_TEXT}]({BRAND_URL})', 'inline':False})
+            embed['fields'] = fields
+        else:
+            embed['description'] += f'\n\nPowered by [{BRAND_TEXT}]({BRAND_URL})'
+        return {'username':'AVAR4ISE', 'allowed_mentions':{'parse':[]}, 'embeds':[embed]}
+    if card:
+        sections = [f"<b>{html.escape(card['title'])}</b>\n{html.escape(card['subtitle'])}"]
+        for field in card['fields']:
+            value = html.escape(field['value'])
+            if field.get('code'):
+                first, sep, rest = value.partition('\n')
+                value = f'<code>{first}</code>' + ('\n'+rest if sep else '')
+            sections.append(f"<b>{html.escape(field['name'])}</b>\n{value}")
+        text = '\n\n'.join(sections)
+    else:
+        text = html.escape(message['text'])
+    return {'chat_id':target['chat_id'], 'parse_mode':'HTML',
+            'text':text+f'\n\nPowered by <a href="{BRAND_URL}">{BRAND_TEXT}</a>',
+            'link_preview_options':{'is_disabled':True}}
 
 
 def send(target, message, opener=None):
@@ -193,7 +261,13 @@ def main():
                     'action': 'LONG', 'reason': 'Example AI rationale; not current market analysis.',
                     'invalidation': 'Example: price breaks through the stop area.', 'source_ids': ['example'],
                     'expires_at': packet['input']['expires_at']}
-        text = 'SYNTHETIC EXAMPLE — NOT SENT\n\n' + signal_message(packet, proposal, now)['text'] + f'\n\nPowered by [{BRAND_TEXT}]({BRAND_URL})'
+        message = signal_message(packet, proposal, now)
+        card = message['card']
+        text = 'SYNTHETIC EXAMPLE — NOT SENT\n\n'+card['title']+'\n'+card['subtitle']+'\n\n'
+        text += '\n\n'.join(f["name"]+'\n'+f["value"] for f in card['fields'])
+        text += f'\n\nPowered by [{BRAND_TEXT}]({BRAND_URL})'
+        (RUNTIME_DIR / 'alerts-preview-discord.json').write_text(json.dumps(payload({'channel':'discord'},message),indent=2))
+        (RUNTIME_DIR / 'alerts-preview-telegram.html').write_text(payload({'channel':'telegram','chat_id':'PREVIEW'},message)['text'])
         (RUNTIME_DIR / 'alerts-preview.txt').write_text(text + '\n')
         print(text)
         return 0

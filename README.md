@@ -65,6 +65,8 @@ For Telegram, wait for `COMMAND_MENU_READY`, then open a private chat with your 
 /performance
 ```
 
+The private bot also receives engine health/error notices, scan summaries, and position updates. Repeated identical errors are throttled; delivery limits are documented in the [remote guide](docs/telegram-remote.md).
+
 The menu registers automatically; no manual BotFather `/setcommands` step is needed. Settings changes require `/confirm CODE`. See the [remote guide](docs/telegram-remote.md) for leverage, margin, slots, pause, and resume.
 
 If remote configuration is disabled or incomplete, `REMOTE_NOT_STARTED` explains why and the engine continues. Correct `.env` and restart `run` to enable it. If the remote process exits, the supervisor retries after at least 60 seconds while continuing position management. Do not also start a standalone Telegram poller with the same token.
