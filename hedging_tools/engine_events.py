@@ -56,6 +56,9 @@ class EngineEvents:
             body += '\nAlerts: '+json.dumps(report.get('alerts'))
             self.emit('SCAN_COMPLETE',body)
             ai = report.get('ai', {})
+            provider = ai.get('provider_health')
+            if provider and provider.get('reason') not in ('HEALTHY','NOT_CALLED'):
+                self.emit('AI_PROVIDER_STATE',json.dumps(provider))
             if ai.get('errors'):
                 self.emit('AI_HEALTH',json.dumps(ai['errors'])+self.ai_hint(ai['errors']))
             elif ai.get('validated',0):

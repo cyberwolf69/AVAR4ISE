@@ -10,11 +10,15 @@ from hedging_tools.analyst import make_packet, validate_proposal
 from hedging_tools.news import fetch_news, news_for_pair
 from hedging_tools.okx_public import OKXPublic
 from hedging_tools.scan import ROOT, run
-from hedging_tools.ai_client import AIClient, AIError
+from hedging_tools.ai_client import AIClient, AIError, AIBackoff
+from hedging_tools.provider_health import ProviderHealth
+from hedging_tools.setup_memory import SetupMemory
+from hedging_tools.improve_evidence import strategy_version
 from hedging_tools.alerts import notify_signals
 from hedging_tools.universe import select as select_universe
 from hedging_tools.signal_history import SignalHistory
 from hedging_tools.controls import Controls
+from hedging_tools.pending_setups import PendingSetups, technical_proposal
 
 
 def review_priority(packets, database):
@@ -36,7 +40,8 @@ def main():
     args = parser.parse_args()
     if args.review_all and not args.ai:
         parser.error("--review-all requires --ai")
-    ai = AIClient() if args.ai else None
+    provider_health = ProviderHealth(args.db) if args.ai else None
+    ai = AIClient(health=provider_health) if args.ai else None
     if args.proposal:
         proposal = json.loads(args.proposal.read_text())
         with closing(sqlite3.connect(args.db)) as db, db:
@@ -49,22 +54,27 @@ def main():
     controls = Controls().read()
     config.update(min_leverage=controls['min_leverage'], max_leverage=controls['max_leverage'],
                   margin_per_trade=controls['margin'])
+    pending = PendingSetups(args.db)
+    retained = pending.pairs(datetime.now(timezone.utc).timestamp())
     public = OKXPublic()
     universe = {'status': 'FIXED', 'pairs': config['pairs']}
     if args.portfolio:
         universe = select_universe(public)
-        config['pairs'] = universe['pairs']
+        config['pairs'] = list(dict.fromkeys(retained + universe['pairs']))[:20]
+        universe['pairs'] = config['pairs']
+        universe['retained_pairs'] = retained
         config['max_positions'] = 5
         (ROOT / 'universe-output.json').write_text(json.dumps(universe, indent=2) + '\n')
     health = fetch_news(args.db)
     scanned = run(public, config, args.db, workers=4 if args.portfolio else 1)
+    memory = SetupMemory(args.db, strategy_version())
     packets = []
     with closing(sqlite3.connect(args.db)) as db, db:
         db.execute("CREATE TABLE IF NOT EXISTS analyst_packets (packet_id TEXT PRIMARY KEY, run_id TEXT, envelope_json TEXT)")
     for result in scanned["results"]:
         now = datetime.now(timezone.utc)
         articles = news_for_pair(args.db, result["pair"], now)
-        envelope = make_packet(result, articles, health, now)
+        envelope = make_packet(result, articles, health, now, memory=memory.context(result,now))
         with closing(sqlite3.connect(args.db)) as db, db:
             db.execute("INSERT INTO analyst_packets VALUES (?,?,?)", (envelope["input"]["packet_id"], scanned["run_id"], json.dumps(envelope)))
         packets.append(envelope)
@@ -100,28 +110,46 @@ def main():
                                (data['pair'], datetime.now(timezone.utc).isoformat()))
             try:
                 analysis.update(status="VALIDATED", **ai.analyze(envelope))
+            except AIBackoff as exc:
+                ai_calls -= 1
+                analysis.update(status="SKIPPED", reason=str(exc))
             except AIError as exc:
-                analysis.update(status="ERROR", reason=str(exc))
+                analysis.update(status="ERROR", reason=str(exc), provider_unavailable=(exc.http_status is not None or "network/TLS" in str(exc)))
         else:
             analysis['reason'] = ('AI not requested' if not ai else
                                   'SNAPSHOT_NOT_ELIGIBLE' if not eligible else
                                   'STALE_SNAPSHOT' if stale else 'AI_CALL_BUDGET_REACHED')
         analysis['screen_reasons'] = data['market'].get('reasons', [])
-        if analysis.get('status') == 'VALIDATED':
+        reference_id = None
+        failed_review = analysis.get('provider_unavailable',False) or analysis.get('reason','').startswith('AI_PROVIDER_COOLDOWN:')
+        if failed_review and data['market']['status'] == 'WATCHLIST' and not stale:
+            pending.retain(data['pair'], datetime.fromisoformat(data['expires_at']).timestamp())
             try:
-                history.register(envelope, analysis['proposal'])
+                analysis['technical_proposal'] = technical_proposal(envelope)
+                analysis['publication_basis'] = 'TECHNICAL'
+            except (ValueError, KeyError, TypeError):
+                pass
+        elif analysis.get('status') == 'VALIDATED' or data['market']['status'] != 'WATCHLIST':
+            pending.remove(data['pair'])
+        published_proposal = analysis.get('proposal') if analysis.get('status') == 'VALIDATED' else analysis.get('technical_proposal')
+        if published_proposal:
+            try:
+                reference_id = history.register(envelope, published_proposal, basis=analysis.get("publication_basis", "AI"))
             except Exception as exc:
                 tracking_errors.append({'pair': data['pair'], 'reason': type(exc).__name__})
             notice = notify_signals([envelope], [analysis])
             alert_states.append(notice['status'])
             deliveries.extend(notice.get('deliveries', []))
+        memory.record(envelope,analysis,datetime.now(timezone.utc),reference_id)
         analyses.append(analysis)
         with closing(sqlite3.connect(args.db)) as db, db:
             db.execute("CREATE TABLE IF NOT EXISTS ai_analyses (id INTEGER PRIMARY KEY, run_id TEXT, packet_id TEXT, result_json TEXT)")
             db.execute("INSERT INTO ai_analyses (run_id,packet_id,result_json) VALUES (?,?,?)", (scanned["run_id"], data["packet_id"], json.dumps(analysis)))
     ai_status = "REQUESTED" if args.ai else "NOT_REQUESTED"
     alerts = {'status': 'ERROR' if 'ERROR' in alert_states else 'CHECKED' if alert_states else 'NO_SIGNALS', 'deliveries': deliveries}
-    output = {"mode": "RESEARCH_ONLY", "ai_status": ai_status, "run_id": scanned["run_id"], "packets": packets, "analyses": analyses, 'alerts': alerts, 'universe': universe, 'signal_tracking': {'errors': tracking_errors}, 'ai_calls': ai_calls}
+    provider_status = provider_health.status(ai.config) if ai and isinstance(ai.config,dict) else {'reason':'NOT_CALLED'}
+    retry_at = provider_status.get('retry_at', 0) if pending.pairs(datetime.now(timezone.utc).timestamp()) else 0
+    output = {"retry_at": retry_at, "provider_health": provider_status, "mode": "RESEARCH_ONLY", "ai_status": ai_status, "run_id": scanned["run_id"], "packets": packets, "analyses": analyses, 'alerts': alerts, 'universe': universe, 'signal_tracking': {'errors': tracking_errors}, 'ai_calls': ai_calls}
     args.output.write_text(json.dumps(output, indent=2) + "\n")
     print(json.dumps({"output": str(args.output.resolve()), "feed_health": health,
                       "pairs": [{"pair": p["input"]["pair"], "market_status": p["input"]["market"]["status"],

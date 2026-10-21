@@ -150,6 +150,7 @@ def report(command,controls,root=RUNTIME_DIR,now=None):
                 f"Open positions: {sum(p['status']!='CLOSED' for p in positions)}\n"
                 f"Management errors: {len(state.get('errors',[]))}\n"
                 f"Latest AI: {research.get('ai_status','N/A')}; calls: {research.get('ai_calls','N/A')}\n"
+                f"Provider: {research.get('provider_health',{}).get('reason','N/A')}; retry_at: {research.get('provider_health',{}).get('retry_at','N/A')}\n"
                 +format_settings(controls.read())+'\nStatus reflects saved snapshots, not a fresh connection test.')
     if command in ('/positions','/history'):
         selected=[p for p in positions if (p['status']=='CLOSED')==(command=='/history')]

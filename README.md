@@ -5,7 +5,7 @@ An **OKX Demo** perpetual trading agent combining market structure screening, AI
 ## Features
 
 - [Dynamic scanning of up to 20 pairs](docs/discovery-and-signals.md), using closed candles, structure, volume context, and spread checks.
-- Structured AI proposals with the option to WAIT; news is optional for technical setups.
+- [Structured AI review and setup memory](docs/agent-review.md): supporting/opposing evidence, reconsideration conditions, and provider cooldowns; news remains optional for technical setups.
 - Isolated demo execution, native stops, position supervision, and reduce-only exits.
 - Persistent daily budget, aggregate position risk, and fill/fee/funding/PnL reconciliation.
 - [Up to five positions](docs/portfolio.md), split TP1/TP2/TP3, and protective stop adjustments.
@@ -125,3 +125,5 @@ The Python package remains `hedging_tools` for compatibility. Optional editable 
 The active setup is [1H/15m BOS and retest market structure](docs/market-structure.md). [Shadow comparison](docs/shadow.md) evaluates an alternative without orders; inspect it with `python3 main.py shadow`. OU/Zeta remains a [separate experiment](docs/research.md) with no effect on orders. Legacy `python3 demo_runner.py` usage is replaced by `python3 main.py run`.
 
 Project documentation, menus, and generated AI explanations use English.
+
+When the AI provider is unavailable, fresh structural setups can still publish with a **Technical Rationale**. Auto-trade continues to require validated AI approval. Pending candidates are rescanned with fresh data for up to 15 minutes; transient/402 failures use bounded 15/30/60-second retry eligibility before a longer pause. See [provider outage handling](docs/agent-review.md#publication-during-provider-outages).

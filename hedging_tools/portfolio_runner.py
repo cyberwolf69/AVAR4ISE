@@ -75,7 +75,7 @@ def loop(manager, stop, interval=60, cycles=0, poll=5, launch=research_process,
                                 result = {'status': 'ENTRY_BLOCKED', 'reason': str(exc) if isinstance(exc, (DemoError, ValueError)) else type(exc).__name__}
                             results.append({'pair': packet['input']['pair'], **result})
                         publish({'status': 'SCAN_COMPLETE', 'cycle': completed, 'decisions': results, 'alerts': data.get('alerts'),
-                                 'ai': {'errors': [{'pair': p['input']['pair'], 'reason': a.get('reason','Unknown AI error')}
+                                 'ai': {'provider_health': data.get('provider_health'), 'errors': [{'pair': p['input']['pair'], 'reason': a.get('reason','Unknown AI error')}
                                                   for p,a in zip(data['packets'],data['analyses']) if a.get('status')=='ERROR'],
                                         'validated': sum(a.get('status')=='VALIDATED' for a in data['analyses'])}})
                     else:
@@ -83,7 +83,10 @@ def loop(manager, stop, interval=60, cycles=0, poll=5, launch=research_process,
                     if output.exists():
                         output.replace(RUNTIME_DIR / 'research-output.json')
                     child = None
-                    next_scan = monotonic() + interval
+                    delay = interval
+                    if data and data.get('retry_at', 0) > 0 and data.get('provider_health', {}).get('reason') != 'HEALTHY':
+                        delay = min(interval, max(poll, data['retry_at'] - time.time()))
+                    next_scan = monotonic() + delay
                     if cycles and completed >= cycles:
                         break
             if child is None and monotonic() >= next_scan and not stop.is_set():

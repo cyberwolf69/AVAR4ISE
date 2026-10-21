@@ -7,7 +7,7 @@ from hedging_tools.paths import PACKAGE_DIR, CONFIG_PATH
 
 
 def strategy_version():
-    paths = [CONFIG_PATH] + [PACKAGE_DIR/name for name in ('controls.py', 'market_time.py', 'regime.py', 'structure.py', 'scanner.py', 'position_policy.py', 'demo_execution.py', 'portfolio.py', 'analyst.py', 'universe.py', 'research.py')]
+    paths = [CONFIG_PATH] + [PACKAGE_DIR/name for name in ('controls.py', 'market_time.py', 'regime.py', 'structure.py', 'scanner.py', 'position_policy.py', 'demo_execution.py', 'portfolio.py', 'analyst.py', 'setup_memory.py', 'pending_setups.py', 'provider_health.py', 'ai_client.py', 'universe.py', 'research.py')]
     policy = Controls().read()
     policy.pop('revision', None)
     policy.pop('entries_enabled', None)
@@ -20,7 +20,9 @@ def snapshot(envelope, proposal, now=None, ticker=None):
     return {'schema': 1, 'strategy_version': strategy_version(), 'captured_at': now.isoformat(),
             'market_observed_at': market.get('observed_at'), 'packet_id': proposal['packet_id'],
             'metrics': market.get('metrics', {}), 'candidate': market.get('candidate', {}),
-            'ai_reason': proposal['reason'], 'ai_invalidation': proposal['invalidation'],
+            'ai_reason': proposal['reason'],
+            'decision_review': {k:proposal.get(k) for k in ('supporting_evidence','opposing_evidence','wait_for')},
+            'setup_memory': envelope['input'].get('setup_memory'), 'ai_invalidation': proposal['invalidation'],
             'news_source_ids': proposal['source_ids'],
             'entry_quote': {k: ticker.get(k) for k in ('bidPx', 'askPx', 'ts')} if ticker else None}
 

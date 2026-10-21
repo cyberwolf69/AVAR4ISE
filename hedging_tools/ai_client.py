@@ -11,6 +11,12 @@ from hedging_tools.paths import PROJECT_ROOT as ROOT
 
 
 class AIError(Exception):
+    def __init__(self, message, http_status=None):
+        super().__init__(message)
+        self.http_status = http_status
+
+
+class AIBackoff(AIError):
     pass
 
 
@@ -46,11 +52,28 @@ def settings(path=ROOT / ".env"):
 
 
 class AIClient:
-    def __init__(self, config=None, opener=None):
+    def __init__(self, config=None, opener=None, health=None):
         self.config = config if config is not None else settings()
+        self.health = health
         self.opener = opener or build_opener(NoRedirect(), HTTPSHandler(context=OKXPublic().context)).open
 
     def request(self, instructions, content, max_tokens=1500):
+        claim = None
+        if self.health:
+            claim, blocked = self.health.claim(self.config)
+            if blocked:
+                raise AIBackoff(f"AI_PROVIDER_COOLDOWN: {blocked['reason']}; retry_at={blocked['retry_at']}")
+        try:
+            text, usage = self._request(instructions, content, max_tokens)
+        except AIError as exc:
+            if claim:
+                self.health.finish(claim, error=exc)
+            raise
+        if claim:
+            self.health.finish(claim, usage=usage)
+        return text, usage
+
+    def _request(self, instructions, content, max_tokens=1500):
         base = self.config.get("AI_BASE_URL", "https://agentrouter.org/v1").rstrip("/")
         if base not in ("https://agentrouter.org/v1", "https://api.apinex.bond/v1"):
             raise AIError("Unexpected API destination")
@@ -94,7 +117,7 @@ class AIClient:
         except HTTPError as exc:
             code = exc.code
             exc.close()
-            raise AIError(f"AI provider HTTP {code}; response body withheld") from None
+            raise AIError(f"AI provider HTTP {code}; response body withheld", http_status=code) from None
         except (URLError, OSError, TimeoutError):
             raise AIError("AI provider network/TLS timeout or connection failure") from None
         except (ValueError, TypeError, KeyError, AttributeError):

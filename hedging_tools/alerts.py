@@ -90,7 +90,7 @@ def markdown(value):
     return re.sub(r'([\\*_~|<>\[\]])', r'\\\1', str(value))
 
 
-def signal_message(envelope, proposal, now=None):
+def signal_message(envelope, proposal, now=None, basis="AI"):
     validated = validate_proposal(proposal, envelope, now)
     signal = validated['signal']
     if signal['action'] == 'WAIT':
@@ -113,7 +113,7 @@ def signal_message(envelope, proposal, now=None):
             "TP1 → SL breakeven + estimated costs · TP2 → lock in profit\n"
             "Strategy limits: margin max. 5 USDT · risk max. 1 USDT\n"
             "Strategy leverage: 10–30x\n\n"
-            f"AI rationale: {clean(proposal['reason'])}\n"
+            f"{basis} rationale: {clean(proposal['reason'])}\n"
             f"Invalidation: {clean(proposal['invalidation'], 350)}\n"
             f"Headline sources: {clean(', '.join(dict.fromkeys(sources)) or 'Unavailable; technical setup', 150)}\n"
             )
@@ -133,7 +133,7 @@ def signal_message(envelope, proposal, now=None):
     if candidate.get('setup_model') == 'structure_bos_retest_v1':
         card['subtitle'] += ' · 15m entry / 1H structure'
     card['fields'].extend([
-        {'name': '🧠 AI Rationale', 'value': brief(proposal['reason']), 'inline': False},
+        {'name': 'Technical Rationale' if basis == 'TECHNICAL' else '🧠 AI Rationale', 'value': brief(proposal['reason']), 'inline': False},
         {'name': 'Invalidation', 'value': brief(proposal['invalidation'], 300), 'inline': False},
         {'name': 'News Context', 'value': brief(', '.join(dict.fromkeys(sources)) or 'Unavailable · technical setup', 150), 'inline': False},
     ])
@@ -235,9 +235,14 @@ def notify_signals(packets, analyses):
             return {'status': 'DISABLED', 'deliveries': []}
         deliveries = []
         for envelope, analysis in zip(packets, analyses):
-            if analysis.get('status') != 'VALIDATED':
+            if analysis.get('status') == 'VALIDATED':
+                message = signal_message(envelope, analysis['proposal'])
+            elif analysis.get('technical_proposal') and analysis.get('publication_basis') == 'TECHNICAL':
+                from hedging_tools.pending_setups import technical_proposal
+                # Recheck freshness and reconstruct locally instead of trusting stored text.
+                message = signal_message(envelope, technical_proposal(envelope), basis='TECHNICAL')
+            else:
                 continue
-            message = signal_message(envelope, analysis['proposal'])
             if message:
                 deliveries.extend(deliver(targets, message))
         return {'status': 'CHECKED', 'deliveries': deliveries}

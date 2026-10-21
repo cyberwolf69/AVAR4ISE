@@ -127,7 +127,7 @@ class SignalHistory:
             db.execute('CREATE INDEX IF NOT EXISTS signal_status_time ON tracked_signals(status,next_ms)')
             db.execute('CREATE TABLE IF NOT EXISTS history_poll_cursor (pair TEXT PRIMARY KEY, attempted_ms INTEGER)')
 
-    def register(self, envelope, proposal, now=None, reference_id=None):
+    def register(self, envelope, proposal, now=None, reference_id=None, basis="AI"):
         now = now or datetime.now(timezone.utc)
         message = signal_message(envelope, proposal, now)
         if message is None:
@@ -136,12 +136,12 @@ class SignalHistory:
         entry, stop = candidate['entry'], candidate['stop_reference']
         issued = int(now.timestamp()*1000)
         observation_start = ((issued + MINUTE - 1)//MINUTE)*MINUTE
-        state = {'id': reference_id or message['id'], 'packet_id': proposal['packet_id'], 'pair': proposal['pair'],
+        state = {'publication_basis': basis, 'id': reference_id or message['id'], 'packet_id': proposal['packet_id'], 'pair': proposal['pair'],
                  'direction': proposal['action'], 'issued_ms': issued, 'observation_start_ms': observation_start,
                  'expires_ms': millis(proposal['expires_at']), 'entry': entry, 'stop': stop,
                  'current_stop': stop, 'targets': list(map(str, targets(entry, stop, proposal['action']))),
                  'status': 'PENDING', 'stage': 0, 'quality': 'OK', 'next_ms': observation_start,
-                 'entry_evidence': snapshot(envelope, proposal, now),
+                 'entry_evidence': {**snapshot(envelope, proposal, now), 'publication_basis': basis},
                  'events': [], 'model': 'MARK_1M_REFERENCE_TOUCH_V1', 'actual_trade_pnl': 'NOT_COMPUTED'}
         with closing(sqlite3.connect(self.path, timeout=10)) as db, db:
             db.execute('INSERT OR IGNORE INTO tracked_signals VALUES (?,?,?,?)',
