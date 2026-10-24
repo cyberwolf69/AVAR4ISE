@@ -20,7 +20,9 @@ from hedging_tools.position_policy import targets, BRAND_URL, BRAND_TEXT
 
 
 class AlertError(Exception):
-    pass
+    def __init__(self, message, http_status=None):
+        super().__init__(message)
+        self.http_status = http_status
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -90,6 +92,11 @@ def markdown(value):
     return re.sub(r'([\\*_~|<>\[\]])', r'\\\1', str(value))
 
 
+def signal_identity(packet, action):
+    bucket = int(datetime.fromisoformat(packet['created_at']).timestamp()) // 900
+    return f"signal:{packet['pair']}:{action}:{bucket}"
+
+
 def signal_message(envelope, proposal, now=None, basis="AI"):
     validated = validate_proposal(proposal, envelope, now)
     signal = validated['signal']
@@ -117,18 +124,17 @@ def signal_message(envelope, proposal, now=None, basis="AI"):
             f"Invalidation: {clean(proposal['invalidation'], 350)}\n"
             f"Headline sources: {clean(', '.join(dict.fromkeys(sources)) or 'Unavailable; technical setup', 150)}\n"
             )
-    bucket = int(datetime.fromisoformat(packet['created_at']).timestamp()) // 900
-    event_id = f"signal:{packet['pair']}:{signal['action']}:{bucket}"
+    event_id = signal_identity(packet, signal['action'])
     card = {
         'title': f"{'🟢' if sign == 1 else '🔴'} {signal['action']} SIGNAL · {signal['pair'].removesuffix('-SWAP')}",
         'subtitle': 'AVAR4ISE · OKX Demo · Reference levels',
         'fields': [
             {'name': 'Entry', 'value': price(entry), 'inline': True, 'code': True},
-            {'name': 'Stop Loss', 'value': f'{price(stop)}\n{(stop-entry)/entry*100:+.2f}%', 'inline': True, 'code': True},
+            {'name': '⬜ Stop Loss', 'value': f'{price(stop)}\n{(stop-entry)/entry*100:+.2f}%', 'inline': True, 'code': True},
         ]}
     for i, tp in enumerate((tp1,tp2,tp3), 1):
         move = (tp-entry)/entry*100
-        card['fields'].append({'name': f'TP{i}',
+        card['fields'].append({'name': f'⬜ TP{i}',
                                'value': f'{price(tp)}\n{move:+.2f}%', 'inline': True, 'code': True})
     if candidate.get('setup_model') == 'structure_bos_retest_v1':
         card['subtitle'] += ' · 15m entry / 1H structure'
@@ -137,7 +143,7 @@ def signal_message(envelope, proposal, now=None, basis="AI"):
         {'name': 'Invalidation', 'value': brief(proposal['invalidation'], 300), 'inline': False},
         {'name': 'News Context', 'value': brief(', '.join(dict.fromkeys(sources)) or 'Unavailable · technical setup', 150), 'inline': False},
     ])
-    return {'id': event_id, 'text': text, 'card': card, 'direction': signal['action'], 'expires_at': signal['expires_at']}
+    return {'id': event_id, 'packet_id': packet['packet_id'], 'text': text, 'card': card, 'direction': signal['action'], 'expires_at': signal['expires_at']}
 
 
 def payload(target, message):
@@ -190,6 +196,10 @@ def send(target, message, opener=None):
                 raise AlertError('Telegram did not confirm message')
         elif not result.get('id'):
             raise AlertError('Discord did not confirm message')
+        remote_id = result['result']['message_id'] if target['channel'] == 'telegram' else result['id']
+        if not re.fullmatch(r'[1-9][0-9]*', str(remote_id)):
+            raise AlertError('Invalid message ID')
+        return str(remote_id)
     except HTTPError as exc:
         code = exc.code
         exc.close()
@@ -219,7 +229,12 @@ def deliver(targets, message, database=RUNTIME_DIR / 'alerts.sqlite3', sender=se
             continue
         status, detail = 'SENT', None
         try:
-            sender(target, message)
+            remote_id = sender(target, message)
+            if message.get('card') and isinstance(remote_id, (str, int)) and re.fullmatch(r'[1-9][0-9]*', str(remote_id)):
+                with closing(sqlite3.connect(database)) as db, db:
+                    db.execute('CREATE TABLE IF NOT EXISTS alert_messages (id TEXT PRIMARY KEY, fingerprint TEXT, signal_id TEXT, remote_id TEXT, base TEXT, digest TEXT, retry REAL, failures INTEGER, disabled INTEGER)')
+                    db.execute('INSERT OR IGNORE INTO alert_messages VALUES (?,?,?,?,?,?,0,0,0)',
+                               (key, fingerprint, message['id'], str(remote_id), json.dumps(message), 'INITIAL'))
         except Exception:
             status, detail = 'UNCONFIRMED', 'Delivery failed or unknown; no automatic resend'
         with closing(sqlite3.connect(database)) as db, db:

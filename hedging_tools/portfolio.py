@@ -402,6 +402,8 @@ class Portfolio:
         p = dict(details, id=prefix, status='ENTRY_PENDING', pnl='0', upl='0',
                  tick=instrument['tickSz'], unit=str(D(instrument['ctVal']) * D(instrument['ctMult'])),
                  legs=[{'size': str(sz), 'price': str(px)} for sz, px in zip(sizes, prices)])
+        from hedging_tools.alerts import signal_identity
+        p['signal_id'] = signal_identity(envelope['input'], analysis['proposal']['action'])
         p['entry_controls'] = settings
         p['entry_evidence'] = snapshot(envelope, analysis['proposal'], self.clock(), ticker)
         p['entry_evidence']['risk_context'] = {k: state[k] for k in ('equity', 'day_start', 'day', 'halted')}

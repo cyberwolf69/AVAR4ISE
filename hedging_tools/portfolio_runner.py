@@ -153,6 +153,7 @@ def main():
         worker = HistoryWorker()
         reviewer = HistoryWorker(module='hedging_tools.improve', arguments=('--evaluate',))
         shadow = HistoryWorker(module='hedging_tools.shadow', arguments=('--update',), interval=5)
+        cards = HistoryWorker(module='hedging_tools.card_updates', arguments=(), interval=15)
         remote = RemoteWorker(publish=lambda report: (print(json.dumps(report),flush=True), notify(report)))
         notify({'status':'ENGINE_STARTED','mode':'OKX_DEMO'})
         def background():
@@ -163,6 +164,7 @@ def main():
             worker.tick()
             reviewer.tick()
             shadow.tick()
+            cards.tick()
             remote.tick()
             try:
                 events.positions(manager.store.read())
@@ -177,6 +179,7 @@ def main():
             worker.close()
             reviewer.close()
             shadow.close()
+            cards.close()
     return 0
 
 

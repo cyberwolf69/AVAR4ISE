@@ -127,3 +127,5 @@ The active setup is [1H/15m BOS and retest market structure](docs/market-structu
 Project documentation, menus, and generated AI explanations use English.
 
 When the AI provider is unavailable, fresh structural setups can still publish with a **Technical Rationale**. Auto-trade continues to require validated AI approval. Pending candidates are rescanned with fresh data for up to 15 minutes; transient/402 failures use bounded 15/30/60-second retry eligibility before a longer pause. See [provider outage handling](docs/agent-review.md#publication-during-provider-outages).
+
+Signal cards now support [live TP/SL markers](docs/signal-card-updates.md) through edits to the original Telegram/Discord message. New message receipts are retained locally; historical cards without receipts cannot be retrofitted automatically.
