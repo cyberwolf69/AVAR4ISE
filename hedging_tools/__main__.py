@@ -5,6 +5,7 @@ import runpy
 import sys
 
 COMMANDS = {
+    'dashboard': 'dashboard',
     'paper-demo': 'paper_demo', 'risk-demo': 'demo', 'scan': 'scan',
     'research': 'research', 'preflight': 'okx_demo', 'agent': 'demo_agent',
     'run': 'portfolio_runner', 'bounded-run': 'demo_runner', 'reconcile': 'reconcile_demo',

@@ -18,6 +18,7 @@ from hedging_tools.history_worker import HistoryWorker
 from hedging_tools.controls import Controls
 from hedging_tools.remote_worker import RemoteWorker
 from hedging_tools.engine_events import EngineEvents
+from hedging_tools.dashboard import Dashboard
 
 
 def research_process(output):
@@ -118,6 +119,8 @@ def main():
     parser.add_argument('--interval', type=int, default=60, help='Seconds between completed research scans')
     parser.add_argument('--poll', type=int, default=5, help='Seconds between portfolio checks (1..30)')
     parser.add_argument('--cycles', type=int, default=0, help='0: run until Ctrl+C; otherwise stop after this many scans')
+    parser.add_argument('--dashboard-port', type=int, default=8765)
+    parser.add_argument('--no-dashboard', action='store_true', help='Disable the local read-only dashboard')
     args = parser.parse_args()
     if not 60 <= args.interval <= 3600 or not 1 <= args.poll <= 30 or args.cycles < 0:
         parser.error('interval 60..3600, poll 1..30, cycles >= 0')
@@ -170,9 +173,16 @@ def main():
                 events.positions(manager.store.read())
             except Exception:
                 print(json.dumps({'status':'OWNER_POSITION_EVENT_ERROR'}),flush=True)
+        dashboard = Dashboard(args.dashboard_port)
+        if not args.no_dashboard:
+            try:
+                print(json.dumps({'status':'DASHBOARD_RUNNING','url':dashboard.start(),'mode':'READ_ONLY'}), flush=True)
+            except (OSError, ValueError, OverflowError):
+                print(json.dumps({'status':'DASHBOARD_UNAVAILABLE','reason':'Local port unavailable; engine continues'}), flush=True)
         try:
             loop(manager, stop, args.interval, args.cycles, args.poll, publish=publish, background=background)
         finally:
+            dashboard.close()
             notify({'status':'ENGINE_STOPPED','positions':'Confirmed native exits remain; stop adjustments require run.'})
             remote.close()
             (RUNTIME_DIR / "engine-heartbeat.json").write_text(json.dumps({"time": datetime.now(timezone.utc).isoformat(), "status": "STOPPED"}))

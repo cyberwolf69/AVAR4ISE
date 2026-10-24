@@ -78,6 +78,14 @@ def main():
         with closing(sqlite3.connect(args.db)) as db, db:
             db.execute("INSERT INTO analyst_packets VALUES (?,?,?)", (envelope["input"]["packet_id"], scanned["run_id"], json.dumps(envelope)))
         packets.append(envelope)
+    def ai_activity(status, pair=None):
+        try:
+            path = args.output.parent / 'ai-activity.json'
+            temporary = path.with_suffix('.tmp')
+            temporary.write_text(json.dumps({'status': status, 'pair': pair, 'time': datetime.now(timezone.utc).isoformat()}))
+            temporary.replace(path)
+        except OSError:
+            pass  # Monitoring must never decide whether a signal can be processed.
     analyses = []
     deliveries, tracking_errors = [], []
     alert_states = []
@@ -108,6 +116,7 @@ def main():
                 with closing(sqlite3.connect(args.db)) as db, db:
                     db.execute('INSERT OR REPLACE INTO ai_review_cursor VALUES (?,?)',
                                (data['pair'], datetime.now(timezone.utc).isoformat()))
+            ai_activity("REVIEWING", data["pair"])
             try:
                 analysis.update(status="VALIDATED", **ai.analyze(envelope))
             except AIBackoff as exc:
@@ -115,6 +124,8 @@ def main():
                 analysis.update(status="SKIPPED", reason=str(exc))
             except AIError as exc:
                 analysis.update(status="ERROR", reason=str(exc), provider_unavailable=(exc.http_status is not None or "network/TLS" in str(exc)))
+            finally:
+                ai_activity("IDLE")
         else:
             analysis['reason'] = ('AI not requested' if not ai else
                                   'SNAPSHOT_NOT_ELIGIBLE' if not eligible else
