@@ -1,135 +1,124 @@
+<div align="center">
+
 # AVAR4ISE
 
-An **OKX Demo** perpetual trading agent combining market structure screening, AI analysis, optional headline context, and persistent risk controls. The project is experimental; simulation results do not establish profitability.
+**Market structure. AI review. Disciplined execution.**
 
-## Features
+An experimental perpetual trading agent for **OKX Demo**, with a local monitoring dashboard and Telegram remote.
 
-- [Dynamic scanning of up to 20 pairs](docs/discovery-and-signals.md), using closed candles, structure, volume context, and spread checks.
-- [Structured AI review and setup memory](docs/agent-review.md): supporting/opposing evidence, reconsideration conditions, and provider cooldowns; news remains optional for technical setups.
-- Isolated demo execution, native stops, position supervision, and reduce-only exits.
-- Persistent daily budget, aggregate position risk, and fill/fee/funding/PnL reconciliation.
-- [Up to five positions](docs/portfolio.md), split TP1/TP2/TP3, and protective stop adjustments.
-- [Improve mode](docs/improve.md): loss reviews and holdout evaluation of proposed filters, without automatic strategy changes.
-- Reference signal tracking, separate from actual trade PnL.
-- [Telegram and Discord alerts](docs/alerts.md), plus an [owner-only Telegram remote](docs/telegram-remote.md).
+[![Tests](https://github.com/cyberwolf69/AVAR4ISE/actions/workflows/tests.yml/badge.svg)](https://github.com/cyberwolf69/AVAR4ISE/actions/workflows/tests.yml)
+![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
+![OKX Demo only](https://img.shields.io/badge/OKX-Demo%20only-92E4BA)
+![Status Alpha](https://img.shields.io/badge/Status-Alpha-E6BD79)
 
-## Getting started
+[Quick start](#quick-start) · [Dashboard](#trading-office) · [Risk controls](#default-risk-controls) · [Documentation](#documentation)
 
-Python **3.11+**, macOS or Linux. The runtime uses the Python standard library. Run from the repository root; package installation is optional.
+</div>
 
-### 1. Download and configure
+---
 
-For a new checkout:
+## What it does
+
+- **Finds setups:** scans up to 20 liquid perpetual pairs using 1H/15m market structure and BOS/retest confirmation.
+- **Reviews evidence:** AI weighs supporting and opposing signals, remembers previous reviews, and uses news when available.
+- **Manages positions:** up to five concurrent demo positions, partial take profits, and protective stop adjustments.
+- **Keeps you informed:** Telegram/Discord signal cards with live TP/SL markers, plus an owner-only Telegram remote.
+- **Tracks outcomes:** reference signals stay separate from execution PnL; improve mode evaluates proposed filters without automatically changing the strategy.
+
+When slots are full or the daily loss limit is reached, qualified signals can still be published. During AI outages, fresh technical setups can publish with a technical rationale; **auto-trading still requires validated AI approval**.
+
+## Quick start
+
+Requires **Python 3.11+** on macOS or Linux. No third-party runtime dependencies are required when running from this checkout.
+
+### 1. Clone and configure
 
 ```sh
 git clone https://github.com/cyberwolf69/AVAR4ISE.git
 cd AVAR4ISE
-# Preserve .env if it already exists
 [ -f .env ] || cp .env.example .env
 chmod 600 .env
 nano .env
 ```
 
-In `.env`, fill in `APINEX_API_KEY`, `OKX_DEMO_API_KEY`, `OKX_DEMO_SECRET_KEY`, and `OKX_DEMO_PASSPHRASE`. Use OKX **Demo Trading** credentials and set `AI_ENABLED=true`.
+Fill these values in your local `.env`:
 
-For the Telegram remote, fill in `TELEGRAM_BOT_TOKEN`, set `TELEGRAM_OWNER_ID` to your numeric Telegram user ID, and set `TELEGRAM_REMOTE_ENABLED=true`. The owner ID is different from the alert channel's `TELEGRAM_CHAT_ID`. For signal delivery, also configure `ALERTS_ENABLED`, `ALERT_CHANNELS`, and the destination credentials described in the [alert guide](docs/alerts.md). Never commit `.env`.
+| Integration | Required configuration |
+| :--- | :--- |
+| AI | `AI_ENABLED=true`, `APINEX_API_KEY`; check `AI_BASE_URL` and `AI_MODEL` for your provider |
+| OKX Demo | `OKX_DEMO_API_KEY`, `OKX_DEMO_SECRET_KEY`, `OKX_DEMO_PASSPHRASE` |
+| Signal alerts *(optional)* | `ALERTS_ENABLED=true`, `ALERT_CHANNELS`, and Telegram or Discord destination credentials — [guide](docs/alerts.md) |
+| Telegram remote *(optional)* | `TELEGRAM_REMOTE_ENABLED=true`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_ID` — [guide](docs/telegram-remote.md) |
 
-### 2. Check the configuration
+Use **Demo Trading credentials**. `TELEGRAM_OWNER_ID` is your numeric user ID, not the signal channel ID. Never commit `.env` or share API keys.
 
-Run these commands from the repository directory:
+### 2. Check and run
 
 ```sh
 # Read the demo account without placing orders
 python3 main.py preflight
-# Check remote configuration locally; no Telegram request
-python3 main.py telegram --check
-```
 
-Resolve any `BLOCKED` result before continuing. The remote check should return `READY`; it does not verify network connectivity.
-
-### 3. Start everything
-
-```sh
+# Start the engine, dashboard, and configured Telegram remote
 python3 main.py run
 ```
 
-Keep this terminal running. This single command starts the trading engine, research, signal tracking, improve/shadow workers, and the Telegram remote when `TELEGRAM_REMOTE_ENABLED=true` and its local configuration is valid. It may place **DEMO orders** after signal validation and risk checks. No second terminal or separate remote command is required.
+Resolve any `BLOCKED` preflight result first. Keep the terminal running; the engine can place **demo orders** after setup validation and risk checks.
 
-For Telegram, wait for `COMMAND_MENU_READY`, then open a private chat with your bot. Send these commands one at a time:
+For Telegram, wait for `COMMAND_MENU_READY`, then send `/start` in a private chat with your bot. The command menu is registered automatically. Use `/status`, `/settings`, `/positions`, and `/performance`; settings changes require confirmation.
 
-```text
-/start
-/status
-/settings
-/positions
-/performance
-```
+> **Stopping:** press `Ctrl+C`. This stops supervision but **does not close positions**. Confirmed native TP/SL orders remain at OKX; further stop adjustments require the engine. Telegram `/resume` cannot restart a stopped process.
 
-The private bot also receives engine health/error notices, scan summaries, and position updates. Repeated identical errors are throttled; delivery limits are documented in the [remote guide](docs/telegram-remote.md).
+## Trading Office
 
-The menu registers automatically; no manual BotFather `/setcommands` step is needed. Settings changes require `/confirm CODE`. See the [remote guide](docs/telegram-remote.md) for leverage, margin, slots, pause, and resume.
+Open **[127.0.0.1:8765](http://127.0.0.1:8765)** after starting `run`.
 
-If remote configuration is disabled or incomplete, `REMOTE_NOT_STARTED` explains why and the engine continues. Correct `.env` and restart `run` to enable it. If the remote process exits, the supervisor retries after at least 60 seconds while continuing position management. Do not also start a standalone Telegram poller with the same token.
+A dark glass dashboard shows module activity, scanner decisions, positions, signal milestones, and provider health. It is **local and read-only**, with explicit offline/stale labels and activity driven by engine telemetry.
 
-### Stopping and restarting
-
-Press `Ctrl+C` once in the running terminal. The supervisor shuts down its engine workers and managed Telegram remote. Stop an older instance before starting a replacement; restart everything with `python3 main.py run`.
-
-By default, `run` scans again 60 seconds after research completes and checks positions with a five-second polling delay. Network requests add latency. **Ctrl+C does not close positions:** confirmed native TP/SL orders remain at OKX, but stop adjustments require the engine to remain running. The managed Telegram remote also stops, so it cannot restart the application. `/resume` permits entries in an active engine; it cannot start a stopped process. See `python3 main.py run --help`.
-
-### Optional checks
+To view saved observations without starting trading:
 
 ```sh
-# Offline tests and synthetic paper example; no API keys required
+python3 main.py dashboard
+```
+
+## Default risk controls
+
+| Control | Default |
+| :--- | :--- |
+| Strategy budget | **50 USDT**, separate from the full demo balance |
+| Daily loss limit | **10%** of day-start strategy equity · Asia/Jakarta |
+| Margin per trade | Up to **5 USDT** |
+| Leverage | **10–30×**, constrained by stop-based risk |
+| Planned entry risk | Up to **1 USDT**, bounded by remaining daily allowance |
+| Open positions | Up to **5**, one per pair |
+| Take profits | **1R / 2R / 3R** · **40% / 35% / 25%**, subject to lot sizes |
+
+Experimental software: simulation results do not establish profitability. Planned risk cannot guarantee realized losses during gaps or slippage. See [position management and limits](docs/portfolio.md).
+
+## Documentation
+
+| Guide | Covers |
+| :--- | :--- |
+| [Usage](docs/usage.md) | Commands and diagnostics |
+| [Market structure](docs/market-structure.md) · [AI review](docs/agent-review.md) | Setup rules, evidence, memory, and provider outages |
+| [Alerts](docs/alerts.md) · [Card updates](docs/signal-card-updates.md) | Telegram/Discord delivery and TP/SL tracking |
+| [Telegram remote](docs/telegram-remote.md) · [Dashboard](docs/dashboard.md) | Controls, monitoring, and data boundaries |
+| [Improve mode](docs/improve.md) · [Architecture](docs/architecture.md) | Evaluation workflow and internals |
+
+<details>
+<summary><strong>Development checks</strong></summary>
+
+```sh
 python3 -B -m unittest discover -s tests -t . -v
 python3 -B main.py paper-demo
-# Local alert preview; sends nothing
-python3 main.py alerts --preview
-# Market, headlines, and AI research without orders
-python3 main.py research --ai
-# Full command list
 python3 main.py --help
 ```
 
-`research --ai` can publish alerts when configured. See the [usage guide](docs/usage.md) for additional commands.
+Code lives in `hedging_tools/`; tests in `tests/`. Local state and reports live in Git-ignored `runtime/`. Project documentation and UI use English.
 
-## Initial limits
+</details>
 
-| Parameter | Value |
-|---|---|
-| Strategy budget | 50 USDT, separate from the full demo account balance |
-| Daily loss limit | 10% of start-of-day strategy equity, Asia/Jakarta timezone |
-| Margin per trade | Maximum 5 USDT |
-| Leverage | 10–30x, constrained by stop-based risk |
-| Planned entry risk | Maximum 1 USDT or remaining daily allowance |
-| Concurrent positions | Maximum five, one per pair |
-| Take profit | 1R/2R/3R, 40%/35%/25% allocation subject to lot sizes |
+---
 
-Planned risk is not a guarantee of realized losses during gaps or slippage. Paper configuration is in [default.json](hedging_tools/config/default.json); it does not control every demo executor limit. See the [portfolio guide](docs/portfolio.md). `bounded-run` retains the legacy test runner for use before portfolio migration.
-
-## Layout
-
-```text
-main.py             CLI entry point
-hedging_tools/       Application code and default configuration
-tests/              Offline tests
-docs/               Guides, architecture, and experiments
-.github/workflows/  Offline test CI
-runtime/            Local databases, reports, journals, archives (Git-ignored)
-.env.example        Credential-free configuration template
-pyproject.toml      Project metadata and optional console entry points
-```
-
-The Python package remains `hedging_tools` for compatibility. Optional editable installation provides `avar4ise`; the existing `hedging-tools` command remains available.
-
-The active setup is [1H/15m BOS and retest market structure](docs/market-structure.md). [Shadow comparison](docs/shadow.md) evaluates an alternative without orders; inspect it with `python3 main.py shadow`. OU/Zeta remains a [separate experiment](docs/research.md) with no effect on orders. Legacy `python3 demo_runner.py` usage is replaced by `python3 main.py run`.
-
-Project documentation, menus, and generated AI explanations use English.
-
-When the AI provider is unavailable, fresh structural setups can still publish with a **Technical Rationale**. Auto-trade continues to require validated AI approval. Pending candidates are rescanned with fresh data for up to 15 minutes; transient/402 failures use bounded 15/30/60-second retry eligibility before a longer pause. See [provider outage handling](docs/agent-review.md#publication-during-provider-outages).
-
-Signal cards now support [live TP/SL markers](docs/signal-card-updates.md) through edits to the original Telegram/Discord message. New message receipts are retained locally; historical cards without receipts cannot be retrofitted automatically.
-
-## Trading Office dashboard
-
-`python3 main.py run` also serves the read-only monitoring office at **http://127.0.0.1:8765**. Inspect engine activity, scanner decisions, positions, reference milestones and provider health. Offline/stale observations are labeled explicitly. See [dashboard usage and data boundaries](docs/dashboard.md).
+<div align="center">
+Powered by <a href="https://www.x.com/web3rai">𝕏 web3rai</a>
+</div>
